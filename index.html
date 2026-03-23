@@ -630,14 +630,6 @@ window.doLogout = function(){
   location.reload();
 }
 
-// 檢查是否已登入（同一個瀏覽器 session）
-if(sessionStorage.getItem('auth')==='1'){
-  hideLoginScreen();
-  loadFromFirebase();
-} else {
-  showLoginScreen();
-}
-
 // Enter 鍵登入
 document.getElementById('login-pwd').addEventListener('keydown', e=>{
   if(e.key==='Enter') window.doLogin();
@@ -1632,8 +1624,16 @@ Object.assign(window,{
   openPersonManager,renderPersonManager,addPerson,
   openGoldModal,saveGold,delGold,saveGoldPrice,
   renderBackup,manualSnapshot,exportJSON,copyJSON,importFromFile,importFromText,clearAllData,
-  closeModal,toggleBank
+  closeModal,toggleBank,doLogin,doLogout,getOwnerOptions,getOwnerList
 });
+
+// ── 檢查登入狀態（所有函式定義完後才執行）──
+if(sessionStorage.getItem('auth')==='1'){
+  hideLoginScreen();
+  loadFromFirebase();
+} else {
+  showLoginScreen();
+}
 </script>
 </body>
 </html>
