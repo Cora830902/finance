@@ -180,9 +180,24 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
 </style>
 </head>
 <body>
-<div class="app">
+<!-- Login Screen -->
+<div id="login-screen" style="display:flex;position:fixed;inset:0;background:#0d1b2a;z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:24px">
+  <div style="font-size:28px;font-weight:700;color:#6EE7B7">家庭財務管理</div>
+  <div style="font-size:14px;color:#64748b">請登入 Google 帳號以存取你的資料</div>
+  <button onclick="googleLogin()" style="display:flex;align-items:center;gap:10px;background:#fff;color:#333;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:600;cursor:pointer">
+    <img src="https://www.google.com/favicon.ico" style="width:20px;height:20px">
+    使用 Google 帳號登入
+  </button>
+</div>
+
+<div class="app" id="app" style="display:none">
   <div class="app-header">
     <div><div class="app-title">家庭財務管理</div><div class="app-sub">信用卡 · 股票 · 借貸 · 黃金</div></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <img id="user-avatar" src="" style="width:28px;height:28px;border-radius:50%;display:block">
+      <span id="user-name" style="font-size:11px;color:var(--muted);max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+      <button onclick="googleLogout()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer">登出</button>
+    </div>
   </div>
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab(0)">💳 信用卡</button>
@@ -564,17 +579,68 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 </div>
 
-<script>
-// ═══════════════════════════════════════════════
-//  DATA
-// ═══════════════════════════════════════════════
-const SK='ffv5';
-let D=load();
-let editExpId=null,editStockId=null,editDebtId=null,editGoldId=null,goldModalType='buy';
-let pnlChart=null,ccView='all';
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-function load(){
-  try{const r=localStorage.getItem(SK);if(r)return JSON.parse(r)}catch{}
+const firebaseConfig = {
+  apiKey: "AIzaSyAHTLZry4rXIT_D-M8wXf6NTdFcBK9adiI",
+  authDomain: "cora-finance.firebaseapp.com",
+  databaseURL: "https://cora-finance-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "cora-finance",
+  storageBucket: "cora-finance.firebasestorage.app",
+  messagingSenderId: "203910933396",
+  appId: "1:203910933396:web:5e35e8c5545df4a88cbd81",
+  measurementId: "G-GWKZ0HR4Q8"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+let currentUser = null;
+
+// ── Login UI ──────────────────────────────────
+function showLoginScreen(){
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+}
+function hideLoginScreen(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+}
+
+window.googleLogin = async function(){
+  try{
+    await signInWithPopup(auth, provider);
+  } catch(e){ alert('登入失敗：'+e.message); }
+}
+window.googleLogout = async function(){
+  if(!confirm('確定要登出？'))return;
+  await signOut(auth);
+}
+
+onAuthStateChanged(auth, user => {
+  if(user){
+    currentUser = user;
+    document.getElementById('user-name').textContent = user.displayName || user.email;
+    document.getElementById('user-avatar').src = user.photoURL || '';
+    hideLoginScreen();
+    loadFromFirebase();
+  } else {
+    currentUser = null;
+    showLoginScreen();
+  }
+});
+
+// ─── Firebase load/save ───────────────────────
+const SK='ffv5';
+let D = defaultData();
+let _saving = false;
+
+function defaultData(){
   return{
     banks:[
       {id:'b1',name:'星展銀行',color:'#6EE7B7',cards:[
@@ -585,9 +651,7 @@ function load(){
         {id:'c3',name:'信用卡',last4:'0000',billConfirmed:{}}
       ]}
     ],
-    expenses:[],
-    payments:{}, // cardId_YYYY-MM → {amount, confirmed}
-    bills:{},    // cardId_YYYY-MM → {amount, confirmed} (manual override)
+    expenses:[],payments:{},bills:{},
     ovRows:{
       income:[
         {id:'i1',name:'景翔薪水',amounts:{},noMonth:{},confirmed:{},fixed:true},
@@ -605,17 +669,40 @@ function load(){
         {id:'f8',name:'存錢',amounts:{},noMonth:{},confirmed:{}},
       ]
     },
-    persons:[],
-    debts:[],
-    stocks:[],
+    persons:[],debts:[],stocks:[],
     gold:{buys:[],sells:[],currentPrice:0},
-    rsu:{entries:[],futurePlanned:[]}
+    rsu:{entries:[],futurePlanned:[]},
+    cardOwners:['孟青','景翔']
   };
 }
-function save(){localStorage.setItem(SK,JSON.stringify(D))}
 
-// migrate old data
-(function migrate(){
+function loadFromFirebase(){
+  if(!currentUser) return;
+  const dataRef = ref(db, 'users/' + currentUser.uid + '/data');
+  onValue(dataRef, snapshot => {
+    const val = snapshot.val();
+    if(val){
+      D = val;
+      runMigrate();
+    } else {
+      D = defaultData();
+    }
+    initApp();
+  }, { onlyOnce: true });
+}
+
+function save(){
+  if(!currentUser) return;
+  if(_saving) return;
+  _saving = true;
+  setTimeout(()=>{
+    set(ref(db, 'users/' + currentUser.uid + '/data'), D)
+      .catch(e => console.error('Save error:', e))
+      .finally(() => { _saving = false; });
+  }, 500);
+}
+
+function runMigrate(){
   try{
     if(!D.rsu)D.rsu={entries:[],futurePlanned:[]};
     if(!D.rsu.futurePlanned)D.rsu.futurePlanned=[];
@@ -635,9 +722,26 @@ function save(){localStorage.setItem(SK,JSON.stringify(D))}
     if(!D.payments)D.payments={};
     if(!D.bills)D.bills={};
     if(!D.banks)D.banks=[];
-    save();
+    if(!D.cardOwners)D.cardOwners=['孟青','景翔'];
   }catch(e){console.warn('migrate error',e)}
-})();
+}
+
+function initApp(){
+  const now=new Date().toISOString();
+  document.getElementById('filter-month').value=now.slice(0,7);
+  document.getElementById('ov-month').value=now.slice(0,7);
+  document.getElementById('exp-date').value=now.slice(0,10);
+  document.getElementById('st-date').value=now.slice(0,10);
+  document.getElementById('debt-date').value=now.slice(0,10);
+  document.getElementById('gold-date').value=now.slice(0,10);
+  document.getElementById('gold-price-input').value=D.gold.currentPrice||'';
+  rebuildExpCardSelect();
+  renderCC();
+}
+
+// ── Global vars ───────────────────────────────
+let editExpId=null,editStockId=null,editDebtId=null,editGoldId=null,goldModalType='buy';
+let pnlChart=null,ovChart=null,ccView='all';
 function fmt(n){return Number(n||0).toLocaleString('zh-TW')}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function allCards(){return D.banks.flatMap(b=>b.cards.map(c=>({...c,bankId:b.id,bankName:b.name,color:b.color,owner:c.owner||''})))}
@@ -658,23 +762,6 @@ function switchTab(i){
   if(i===4)renderGold();
   if(i===5)renderBackup();
 }
-
-window.onload=function(){
-  // Auto snapshot on open (if data exists)
-  if(D.expenses.length||D.stocks.length||D.debts.length||(D.gold.buys||[]).length){
-    saveSnapshot('自動快照');
-  }
-  const now=new Date().toISOString();
-  document.getElementById('filter-month').value=now.slice(0,7);
-  document.getElementById('ov-month').value=now.slice(0,7);
-  document.getElementById('exp-date').value=now.slice(0,10);
-  document.getElementById('st-date').value=now.slice(0,10);
-  document.getElementById('debt-date').value=now.slice(0,10);
-  document.getElementById('gold-date').value=now.slice(0,10);
-  document.getElementById('gold-price-input').value=D.gold.currentPrice||'';
-  rebuildExpCardSelect();
-  renderCC();
-};
 
 // ═══════════════════════════════════════════════
 //  CREDIT CARD TAB
@@ -1134,7 +1221,6 @@ function delRSUFuture(i){if(!confirm('確定刪除？'))return;(D.rsu.futurePlan
 // ═══════════════════════════════════════════════
 //  OVERVIEW CHART
 // ═══════════════════════════════════════════════
-let ovChart=null;
 function renderOvChart(){
   // Collect last 12 months of data
   const months=[];
@@ -1453,73 +1539,20 @@ function delGold(type,id){
 }
 
 // ═══════════════════════════════════════════════
-//  BACKUP & RESTORE
+//  BACKUP & RESTORE (Firebase version)
 // ═══════════════════════════════════════════════
-const SNAP_KEY='ffv5_snapshots';
-const MAX_SNAPS=5;
-
-function getSnapshots(){
-  try{const r=localStorage.getItem(SNAP_KEY);if(r)return JSON.parse(r);}catch{}
-  return[];
-}
-function saveSnapshot(label){
-  const snaps=getSnapshots();
-  const snap={
-    time:new Date().toISOString(),
-    label:label||'自動快照',
-    data:JSON.parse(JSON.stringify(D))
-  };
-  snaps.unshift(snap);
-  if(snaps.length>MAX_SNAPS)snaps.length=MAX_SNAPS;
-  localStorage.setItem(SNAP_KEY,JSON.stringify(snaps));
-}
-function manualSnapshot(){
-  saveSnapshot('手動快照');
-  renderBackup();
-  alert('✅ 快照已儲存！');
-}
-
 function renderBackup(){
-  // Stats
   const expCount=D.expenses.length;
   const stockCount=D.stocks.length;
   const debtCount=D.debts.length;
   const goldCount=(D.gold.buys||[]).length+(D.gold.sells||[]).length;
-  const dataSize=(localStorage.getItem(SK)||'').length;
   document.getElementById('backup-stats').innerHTML=`
     💳 消費記錄：<b>${expCount}</b> 筆　📈 股票：<b>${stockCount}</b> 筆<br>
     🤝 借貸：<b>${debtCount}</b> 筆　🥇 黃金：<b>${goldCount}</b> 筆<br>
-    💾 資料大小：<b>${(dataSize/1024).toFixed(1)} KB</b>　最後儲存：<b>${new Date().toLocaleString('zh-TW')}</b>`;
-
-  // Snapshots
-  const snaps=getSnapshots();
-  const snapList=document.getElementById('snapshot-list');
-  if(!snaps.length){snapList.innerHTML='<div class="empty" style="padding:12px">尚無快照</div>';return;}
-  snapList.innerHTML=snaps.map((s,i)=>{
-    const d=new Date(s.time);
-    const timeStr=`${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
-    const exp=s.data.expenses?.length||0;
-    return`<div class="snapshot-item">
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:600">${s.label} <span style="color:var(--muted);font-weight:400">${timeStr}</span></div>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px">消費${exp}筆・股票${s.data.stocks?.length||0}筆・借貸${s.data.debts?.length||0}筆</div>
-      </div>
-      <button class="btn btn-sm btn-secondary" onclick="restoreSnapshot(${i})" style="font-size:11px">還原</button>
-    </div>`;
-  }).join('');
+    ☁️ 資料儲存於 Firebase 雲端，已自動同步`;
+  document.getElementById('snapshot-list').innerHTML='<div style="font-size:12px;color:var(--muted);padding:8px">資料已存於 Firebase 雲端，不需要本機快照 ✅</div>';
 }
-
-function restoreSnapshot(i){
-  const snaps=getSnapshots();
-  const snap=snaps[i];if(!snap)return;
-  if(!confirm(`確定還原到「${snap.label}」嗎？\n${new Date(snap.time).toLocaleString('zh-TW')}\n\n目前資料會被取代！`))return;
-  saveSnapshot('還原前自動備份');
-  D=JSON.parse(JSON.stringify(snap.data));
-  save();
-  alert('✅ 已還原！重新整理頁面中...');
-  location.reload();
-}
-
+function manualSnapshot(){alert('資料已自動同步到 Firebase 雲端 ✅');}
 function exportJSON(){
   const json=JSON.stringify(D,null,2);
   const blob=new Blob([json],{type:'application/json'});
@@ -1530,13 +1563,11 @@ function exportJSON(){
   document.body.appendChild(a);a.click();
   document.body.removeChild(a);URL.revokeObjectURL(url);
 }
-
 async function copyJSON(){
   try{
     await navigator.clipboard.writeText(JSON.stringify(D,null,2));
-    alert('✅ 已複製到剪貼簿！可貼到記事本或 Line 儲存。');
+    alert('✅ 已複製到剪貼簿！');
   }catch{
-    // fallback
     const ta=document.createElement('textarea');
     ta.value=JSON.stringify(D,null,2);
     document.body.appendChild(ta);ta.select();document.execCommand('copy');
@@ -1544,41 +1575,34 @@ async function copyJSON(){
     alert('✅ 已複製到剪貼簿！');
   }
 }
-
 function importFromFile(evt){
   const file=evt.target.files[0];if(!file)return;
   const reader=new FileReader();
-  reader.onload=function(e){
-    doImport(e.target.result);
-  };
+  reader.onload=function(e){doImport(e.target.result);};
   reader.readAsText(file);
 }
-
 function importFromText(){
   const text=document.getElementById('import-text').value.trim();
   if(!text){alert('請貼上 JSON 備份文字');return;}
   doImport(text);
 }
-
 function doImport(jsonText){
   let parsed;
   try{parsed=JSON.parse(jsonText);}
-  catch{alert('❌ 格式錯誤，請確認是正確的備份檔案');return;}
+  catch{alert('❌ 格式錯誤');return;}
   if(!parsed.expenses&&!parsed.banks){alert('❌ 這不是正確的備份格式');return;}
   if(!confirm('確定要還原此備份？目前所有資料會被覆蓋！'))return;
-  saveSnapshot('匯入前自動備份');
   D=parsed;
   save();
   alert('✅ 還原成功！');
   location.reload();
 }
-
 function clearAllData(){
-  if(!confirm('⚠️ 確定要清除所有資料嗎？\n這個操作無法復原！'))return;
-  if(!confirm('再次確認：真的要清除所有資料？'))return;
-  saveSnapshot('清除前最後備份');
-  localStorage.removeItem(SK);
-  alert('已清除。頁面重新整理中...');
+  if(!confirm('⚠️ 確定要清除所有資料嗎？'))return;
+  if(!confirm('再次確認：真的要清除？'))return;
+  D=defaultData();
+  save();
+  alert('已清除！');
   location.reload();
 }
 
@@ -1587,6 +1611,22 @@ function clearAllData(){
 // ═══════════════════════════════════════════════
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open')}));
+
+// ── Expose all functions to window for onclick handlers ──
+Object.assign(window,{
+  switchTab,setCCView,openExpenseModal,editExpense,delExpense,
+  toggleInst,buildInstFields,saveExpense,
+  openBankManager,renderBankManager,addBankInManager,saveBankManager,
+  handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,
+  openStockModal,editStock,delStock,setStockType,saveStock,
+  addOvRow,renderOverview,setOvAmt,toggleOvConf,toggleNoMonth,delOvRow,recalcOverview,renderOvChart,
+  openRSUModal,openRSUEdit,saveRSU,delRSU,delRSUFuture,
+  openDebtModal,editDebt,delDebt,setDebtDir,saveDebt,
+  openPersonManager,renderPersonManager,addPerson,
+  openGoldModal,saveGold,delGold,saveGoldPrice,
+  renderBackup,manualSnapshot,exportJSON,copyJSON,importFromFile,importFromText,clearAllData,
+  closeModal,toggleBank
+});
 </script>
 </body>
 </html>
