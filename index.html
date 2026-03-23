@@ -181,23 +181,18 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
 </head>
 <body>
 <!-- Login Screen -->
-<div id="login-screen" style="display:flex;position:fixed;inset:0;background:#0d1b2a;z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:24px">
-  <div style="font-size:28px;font-weight:700;color:#6EE7B7">家庭財務管理</div>
-  <div style="font-size:14px;color:#64748b">請登入 Google 帳號以存取你的資料</div>
-  <button onclick="googleLogin()" style="display:flex;align-items:center;gap:10px;background:#fff;color:#333;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:600;cursor:pointer">
-    <img src="https://www.google.com/favicon.ico" style="width:20px;height:20px">
-    使用 Google 帳號登入
-  </button>
+<div id="login-screen" style="display:flex;position:fixed;inset:0;background:#0d1b2a;z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px">
+  <div style="font-size:28px;font-weight:700;color:#6EE7B7">🏠 家庭財務管理</div>
+  <div style="font-size:13px;color:#64748b">請輸入密碼</div>
+  <input type="password" id="login-pwd" placeholder="密碼" style="background:#142232;border:1px solid #263d54;color:#e2e8f0;border-radius:10px;padding:12px 16px;font-size:16px;width:100%;max-width:280px;text-align:center;letter-spacing:4px">
+  <div id="login-err" style="color:#F87171;font-size:12px;min-height:16px"></div>
+  <button onclick="doLogin()" style="background:#6EE7B7;color:#0d1b2a;border:none;border-radius:10px;padding:12px 32px;font-size:15px;font-weight:700;cursor:pointer;width:100%;max-width:280px">進入</button>
 </div>
 
 <div class="app" id="app" style="display:none">
   <div class="app-header">
     <div><div class="app-title">家庭財務管理</div><div class="app-sub">信用卡 · 股票 · 借貸 · 黃金</div></div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <img id="user-avatar" src="" style="width:28px;height:28px;border-radius:50%;display:block">
-      <span id="user-name" style="font-size:11px;color:var(--muted);max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-      <button onclick="googleLogout()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer">登出</button>
-    </div>
+    <button onclick="doLogout()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">登出</button>
   </div>
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab(0)">💳 信用卡</button>
@@ -582,7 +577,6 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAHTLZry4rXIT_D-M8wXf6NTdFcBK9adiI",
@@ -591,18 +585,23 @@ const firebaseConfig = {
   projectId: "cora-finance",
   storageBucket: "cora-finance.firebasestorage.app",
   messagingSenderId: "203910933396",
-  appId: "1:203910933396:web:5e35e8c5545df4a88cbd81",
-  measurementId: "G-GWKZ0HR4Q8"
+  appId: "1:203910933396:web:5e35e8c5545df4a88cbd81"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
 
-let currentUser = null;
+// ── 密碼登入 ──────────────────────────────────
+// 密碼用 SHA-256 雜湊儲存，F12 看不到原始密碼
+const PASS_HASH = "0dc2de65f9289b5f25c5c69a83cf1563c812620813d75c849bdf689a96061bfb";
 
-// ── Login UI ──────────────────────────────────
+async function hashPassword(pwd){
+  const msgBuffer = new TextEncoder().encode(pwd);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
 function showLoginScreen(){
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
@@ -612,27 +611,36 @@ function hideLoginScreen(){
   document.getElementById('app').style.display='block';
 }
 
-window.googleLogin = async function(){
-  try{
-    await signInWithPopup(auth, provider);
-  } catch(e){ alert('登入失敗：'+e.message); }
-}
-window.googleLogout = async function(){
-  if(!confirm('確定要登出？'))return;
-  await signOut(auth);
-}
-
-onAuthStateChanged(auth, user => {
-  if(user){
-    currentUser = user;
-    document.getElementById('user-name').textContent = user.displayName || user.email;
-    document.getElementById('user-avatar').src = user.photoURL || '';
+window.doLogin = async function(){
+  const pwd = document.getElementById('login-pwd').value;
+  const hash = await hashPassword(pwd);
+  if(hash === PASS_HASH){
+    sessionStorage.setItem('auth','1');
     hideLoginScreen();
     loadFromFirebase();
   } else {
-    currentUser = null;
-    showLoginScreen();
+    document.getElementById('login-err').textContent='密碼錯誤，請再試一次';
+    document.getElementById('login-pwd').value='';
   }
+}
+
+window.doLogout = function(){
+  if(!confirm('確定要登出？'))return;
+  sessionStorage.removeItem('auth');
+  location.reload();
+}
+
+// 檢查是否已登入（同一個瀏覽器 session）
+if(sessionStorage.getItem('auth')==='1'){
+  hideLoginScreen();
+  loadFromFirebase();
+} else {
+  showLoginScreen();
+}
+
+// Enter 鍵登入
+document.getElementById('login-pwd').addEventListener('keydown', e=>{
+  if(e.key==='Enter') window.doLogin();
 });
 
 // ─── Firebase load/save ───────────────────────
@@ -677,8 +685,7 @@ function defaultData(){
 }
 
 function loadFromFirebase(){
-  if(!currentUser) return;
-  const dataRef = ref(db, 'users/' + currentUser.uid + '/data');
+  const dataRef = ref(db, 'finance/data');
   onValue(dataRef, snapshot => {
     const val = snapshot.val();
     if(val){
@@ -692,11 +699,11 @@ function loadFromFirebase(){
 }
 
 function save(){
-  if(!currentUser) return;
+  if(!sessionStorage.getItem('auth'))return;
   if(_saving) return;
   _saving = true;
   setTimeout(()=>{
-    set(ref(db, 'users/' + currentUser.uid + '/data'), D)
+    set(ref(db, 'finance/data'), D)
       .catch(e => console.error('Save error:', e))
       .finally(() => { _saving = false; });
   }, 500);
