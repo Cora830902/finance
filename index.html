@@ -577,14 +577,11 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
 </div>
 
 <script>
-// 包裝成原本程式碼相容的函式
 const initializeApp = (cfg) => firebase.initializeApp(cfg);
 const getDatabase = () => firebase.database();
 const ref = (db, path) => db.ref(path);
 const set = (r, data) => r.set(data);
-const onValue = (r, cb, errCb) => {
-  r.once('value', cb, errCb);
-};
+const onValue = (r, cb, errCb) => { r.once('value', cb, errCb); };
 
 const firebaseConfig = {
   apiKey: "AIzaSyAHTLZry4rXIT_D-M8wXf6NTdFcBK9adiI",
@@ -808,11 +805,30 @@ function renderCC(){
       bankBill+=bill;
       const billConf=isBillConfirmed(c.id,mo);
       const paidConf=isPaidConfirmed(c.id,mo);
-      return`<div class="card-row">
+      // 該卡消費明細（只在全部/本月明細模式顯示）
+      let cardExpHTML='';
+      if(ccView!=='yearly'){
+        const cardExps=D.expenses.filter(e=>e.cardId===c.id&&e.date&&e.date.startsWith(mo)).sort((a,b)=>b.date.localeCompare(a.date));
+        if(cardExps.length){
+          cardExpHTML=`<div style="padding:4px 8px 6px 22px;display:flex;flex-direction:column;gap:4px">`;
+          cardExps.forEach(e=>{
+            const total=e.isInstallment?e.installments.reduce((s,i)=>s+Number(i.amount||0),0):Number(e.amount||0);
+            cardExpHTML+=`<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);padding:3px 0;border-top:1px solid #1a2d3f">
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.date.slice(5)} ${e.name}${e.isInstallment?` (分${e.installments.length}期)`:''}</span>
+              <span style="font-family:var(--mono);color:var(--text);margin-left:8px;flex-shrink:0">$${fmt(total)}</span>
+              <button onclick="editExpense('${e.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 2px;flex-shrink:0">✏</button>
+              <button onclick="delExpense('${e.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 2px;flex-shrink:0">🗑</button>
+            </div>`;
+          });
+          cardExpHTML+=`</div>`;
+        }
+      }
+      return`<div class="card-row" style="flex-direction:column;align-items:stretch;padding:0">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0">
         <div class="card-dot" style="background:${b.color}"></div>
         <div class="card-info">
           <div class="card-name-text">${c.name}</div>
-          <div class="card-last4"><span style="color:var(--accent2)">${c.owner||''}</span>${c.owner?' · ':''}<span style="color:var(--muted)">${b.name}</span> · ${c.last4}</div>
+          <div class="card-last4"><span style="color:var(--accent2)">${c.owner||'—'}</span> · <span style="color:var(--muted)">${b.name}</span> · ${c.last4}</div>
         </div>
         <div class="card-amounts">
           <span class="card-bill-val ${billConf?'confirmed':''}" title="點擊切換確認" onclick="toggleBillConfirm('${c.id}','${mo}')">帳$${fmt(bill)}</span>
@@ -821,6 +837,8 @@ function renderCC(){
           ${unpaid>0?`<span class="slash">/</span><span class="card-unpaid-val">欠$${fmt(unpaid)}</span>`:''}
         </div>
         <button class="card-edit-btn" onclick="openCardPayModal('${c.id}','${mo}')">✏</button>
+        </div>
+        ${cardExpHTML}
       </div>`;
     }).join('');
     bankHTML+=`<div class="bank-block">
@@ -912,7 +930,8 @@ function rebuildExpCardSelect(){
   const sel=document.getElementById('exp-card');
   sel.innerHTML='';
   D.banks.forEach(b=>b.cards.forEach(c=>{
-    sel.innerHTML+=`<option value="${c.id}">${b.name} — ${c.name} (${c.last4})</option>`;
+    const owner=c.owner?`【${c.owner}】`:'';
+    sel.innerHTML+=`<option value="${c.id}">${owner}${b.name} — ${c.name} (${c.last4})</option>`;
   }));
 }
 function openExpenseModal(id){
@@ -1014,6 +1033,15 @@ function renderBankManager(){
 function addBankInManager(){
   bankMgrState.push({id:uid(),name:'新銀行',color:'#94a3b8',cards:[]});
   renderBankManager();
+  // 自動捲動到最新新增的銀行並聚焦輸入框
+  setTimeout(()=>{
+    const inputs=document.querySelectorAll('#bank-manager-list input[type=text], #bank-manager-list input:not([type=color])');
+    if(inputs.length){
+      const last=inputs[inputs.length-1];
+      last.focus();last.select();
+      last.scrollIntoView({behavior:'smooth',block:'center'});
+    }
+  },50);
 }
 function saveBankManager(){
   D.banks=bankMgrState;save();closeModal('bank-modal');rebuildExpCardSelect();renderCC();
