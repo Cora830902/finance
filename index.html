@@ -1088,6 +1088,9 @@ function openBankManager(){
   document.getElementById('bank-modal').classList.add('open');
 }
 function renderBankManager(){
+  // 補齊沒有 owner 的卡片，預設為第一個選項
+  const defaultOwner=getOwnerList()[0]||'';
+  bankMgrState.forEach(b=>b.cards.forEach(c=>{if(!c.owner)c.owner=defaultOwner;}));
   document.getElementById('bank-manager-list').innerHTML=bankMgrState.map((b,bi)=>`
     <div style="background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:10px">
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
@@ -1104,7 +1107,7 @@ function renderBankManager(){
           <input placeholder="末四碼" value="${c.last4}" maxlength="4" onchange="bankMgrState[${bi}].cards[${ci}].last4=this.value" style="width:52px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--mono)">
           <button onclick="bankMgrState[${bi}].cards.splice(${ci},1);renderBankManager()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">×</button>
         </div>`).join('')}
-      <button onclick="bankMgrState[${bi}].cards.push({id:uid(),name:'新卡片',last4:'0000',billConfirmed:{},confirmed:{}});renderBankManager()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;padding-left:8px">＋ 新增卡片</button>
+      <button onclick="bankMgrState[${bi}].cards.push({id:uid(),name:'新卡片',last4:'',owner:getOwnerList()[0]||''});renderBankManager()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;padding-left:8px">＋ 新增卡片</button>
     </div>`).join('');
 }
 function addBankInManager(){
