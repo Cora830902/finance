@@ -764,7 +764,8 @@ function initApp(){
   document.getElementById('gold-date').value=now.slice(0,10);
   document.getElementById('gold-price-input').value=D.gold.currentPrice||'';
   rebuildExpCardSelect();
-  renderCC();
+  try{const t=parseInt(localStorage.getItem('lastTab'));if(t>=0&&t<=5)switchTab(t);else renderCC();}
+  catch(e){renderCC();}
 }
 
 // ── Global vars ───────────────────────────────
@@ -781,6 +782,7 @@ function findCard(cid){return allCards().find(c=>c.id===cid)}
 let curTab=0;
 function switchTab(i){
   curTab=i;
+  try{localStorage.setItem('lastTab',i);}catch(e){}
   document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',i===j));
   document.querySelectorAll('.tab-content').forEach((c,j)=>c.classList.toggle('active',i===j));
   if(i===0)renderCC();
