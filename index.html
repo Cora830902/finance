@@ -370,12 +370,20 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden">
       <div style="background:var(--bg3);padding:11px 14px;display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:13px;font-weight:700;color:var(--accent)">📦 目前總庫存</span>
-        <span id="inventory-summary" style="font-size:11px;color:var(--muted)"></span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="price-updated-label" style="font-size:10px;color:var(--muted)"></span>
+          <span id="inventory-summary" style="font-size:11px;color:var(--muted)"></span>
+          <button id="price-refresh-btn" onclick="refreshStockPrices()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer" title="更新即時股價">🔄</button>
+        </div>
       </div>
       <div id="inventory-list"><div class="empty" style="padding:16px">尚無持股</div></div>
       <div id="inventory-total" style="display:none;padding:10px 14px;background:var(--bg3);display:flex;justify-content:space-between;font-size:12px;font-weight:700">
         <span style="color:var(--muted)">總投入成本</span>
         <span id="inventory-total-val" style="font-family:var(--mono);color:var(--yellow)"></span>
+      </div>
+      <div id="unrealized-pnl-row" style="display:none;padding:8px 14px;background:#0e1f30;border-top:1px solid var(--border);justify-content:space-between;font-size:12px;font-weight:700">
+        <span style="color:var(--muted)">⚡ 未實現損益</span>
+        <span id="unrealized-pnl-val" style="font-family:var(--mono)"></span>
       </div>
     </div>
 
@@ -527,6 +535,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <div class="form-grid">
         <label>信用卡</label><select id="exp-card"></select>
         <label>消費日</label><input type="date" id="exp-date">
+        <label style="color:var(--accent2)">帳單月份</label><input type="month" id="exp-billing-month" style="background:var(--bg3);border:1px solid var(--accent2);color:var(--accent2);border-radius:8px;padding:9px 11px;font-size:13px;width:100%">
         <label>名稱</label><input type="text" id="exp-name" placeholder="例：KK day">
         <label>類別</label>
         <select id="exp-cat"><option>餐飲</option><option>交通</option><option>購物</option><option>娛樂</option><option>旅遊</option><option>醫療</option><option>超市</option><option>加油</option><option selected>其他</option></select>
@@ -828,6 +837,7 @@ function initApp(){
 // ── Global vars ───────────────────────────────
 let editExpId=null,editStockId=null,editDebtId=null,editGoldId=null,goldModalType='buy';
 let pnlChart=null,ovChart=null,ccView='all',stockListView='all';
+let stockPriceCache={},stockPriceUpdated=null;
 function fmt(n){return Number(n||0).toLocaleString('zh-TW')}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function allCards(){return D.banks.flatMap(b=>b.cards.map(c=>({...c,bankId:b.id,bankName:b.name,color:b.color,owner:c.owner||''})))}
@@ -858,8 +868,12 @@ function setCCView(v,el){
   document.querySelectorAll('#cc-view-tabs .view-tab').forEach(t=>t.classList.toggle('active',t===el));
   renderCC();
 }
+function getExpBillingMonth(e){
+  // 優先使用帳單歸屬月，向下相容沒有此欄位的舊資料（用交易日期的月份）
+  return e.billingMonth||(e.date?e.date.slice(0,7):'');
+}
 function getCardBill(cid,mo){
-  return D.expenses.filter(e=>e.cardId===cid&&e.date&&e.date.startsWith(mo))
+  return D.expenses.filter(e=>e.cardId===cid&&getExpBillingMonth(e)===mo)
     .reduce((s,e)=>s+(e.isInstallment?e.installments.reduce((a,i)=>a+Number(i.amount||0),0):Number(e.amount||0)),0);
 }
 function getPaid(cid,mo){return Number((D.payments[cid+'_'+mo]||{}).amount||0)}
@@ -889,7 +903,7 @@ function renderCC(){
       const billConf=isBillConfirmed(c.id,mo);
       const paidConf=isPaidConfirmed(c.id,mo);
       // 該卡本月消費明細
-      const cardExps=D.expenses.filter(e=>e.cardId===c.id&&e.date&&e.date.startsWith(mo)).sort((a,b)=>b.date.localeCompare(a.date));
+      const cardExps=D.expenses.filter(e=>e.cardId===c.id&&getExpBillingMonth(e)===mo).sort((a,b)=>b.date.localeCompare(a.date));
       const cardExpHTML=cardExps.length
         ?cardExps.map(e=>{
             const total=e.isInstallment?e.installments.reduce((s,i)=>s+Number(i.amount||0),0):Number(e.amount||0);
@@ -947,10 +961,10 @@ function toggleBank(bid){
 function renderExpenses(mo){
   let filtered=[];
   if(ccView==='all'||ccView==='monthly'){
-    filtered=D.expenses.filter(e=>e.date&&e.date.startsWith(mo));
+    filtered=D.expenses.filter(e=>getExpBillingMonth(e)===mo);
   } else if(ccView==='yearly'){
     const yr=mo.slice(0,4);
-    filtered=D.expenses.filter(e=>e.date&&e.date.startsWith(yr));
+    filtered=D.expenses.filter(e=>getExpBillingMonth(e).startsWith(yr));
   }
   filtered=filtered.sort((a,b)=>b.date.localeCompare(a.date));
   const el=document.getElementById('expense-list');
@@ -1015,10 +1029,12 @@ function openExpenseModal(id){
   editExpId=id||null;
   document.getElementById('exp-modal-title').textContent=id?'編輯消費':'新增消費';
   rebuildExpCardSelect();
+  const currentMo=document.getElementById('filter-month').value;
   if(id){
     const e=D.expenses.find(x=>x.id===id);if(!e)return;
     document.getElementById('exp-card').value=e.cardId;
     document.getElementById('exp-date').value=e.date;
+    document.getElementById('exp-billing-month').value=getExpBillingMonth(e)||currentMo;
     document.getElementById('exp-name').value=e.name;
     document.getElementById('exp-cat').value=e.category||'其他';
     document.getElementById('exp-note').value=e.note||'';
@@ -1028,6 +1044,7 @@ function openExpenseModal(id){
     else document.getElementById('exp-amount').value=e.amount||'';
   } else {
     document.getElementById('exp-date').value=new Date().toISOString().slice(0,10);
+    document.getElementById('exp-billing-month').value=currentMo;
     ['exp-name','exp-note','exp-amount'].forEach(k=>document.getElementById(k).value='');
     document.getElementById('exp-inst').checked=false;toggleInst();
   }
@@ -1051,7 +1068,8 @@ function saveExpense(){
   if(!name){alert('請輸入名稱');return;}
   const isInst=document.getElementById('exp-inst').checked;
   const installments=isInst?[...document.querySelectorAll('.inst-amt')].map((el,i)=>({seq:i+1,amount:el.value||'0'})):[];
-  const e={id:editExpId||uid(),cardId:document.getElementById('exp-card').value,date:document.getElementById('exp-date').value,name,category:document.getElementById('exp-cat').value,note:document.getElementById('exp-note').value,isInstallment:isInst,amount:isInst?'0':document.getElementById('exp-amount').value,installments};
+  const billingMonth=document.getElementById('exp-billing-month').value||document.getElementById('filter-month').value;
+  const e={id:editExpId||uid(),cardId:document.getElementById('exp-card').value,date:document.getElementById('exp-date').value,billingMonth,name,category:document.getElementById('exp-cat').value,note:document.getElementById('exp-note').value,isInstallment:isInst,amount:isInst?'0':document.getElementById('exp-amount').value,installments};
   D.expenses=editExpId?D.expenses.map(x=>x.id===editExpId?e:x):[...D.expenses,e];
   save();closeModal('expense-modal');renderCC();
 }
@@ -1415,6 +1433,62 @@ function getStockListDateFilter(){
   }
   return null;
 }
+async function fetchStockPrices(tickers){
+  if(!tickers.length)return;
+  const tseQ=tickers.map(t=>`tse_${t}.tw`).join('|');
+  try{
+    const res=await fetch(`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${tseQ}&json=1&delay=0`);
+    const data=await res.json();
+    const otcRetry=[];
+    if(data.msgArray){
+      data.msgArray.forEach(item=>{
+        const t=item.c;
+        const price=parseFloat(item.z);
+        if(!isNaN(price)&&item.z!=='-'){
+          const prev=parseFloat(item.y)||price;
+          stockPriceCache[t]={price,prev,change:price-prev,pct:((price-prev)/prev*100).toFixed(2)};
+        }else{otcRetry.push(t);}
+      });
+    }
+    if(otcRetry.length){
+      const otcQ=otcRetry.map(t=>`otc_${t}.tw`).join('|');
+      const r2=await fetch(`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${otcQ}&json=1&delay=0`);
+      const d2=await r2.json();
+      if(d2.msgArray){
+        d2.msgArray.forEach(item=>{
+          const t=item.c;
+          const price=parseFloat(item.z);
+          if(!isNaN(price)&&item.z!=='-'){
+            const prev=parseFloat(item.y)||price;
+            stockPriceCache[t]={price,prev,change:price-prev,pct:((price-prev)/prev*100).toFixed(2)};
+          }
+        });
+      }
+    }
+    stockPriceUpdated=new Date();
+  }catch(e){console.error('fetchStockPrices error:',e);}
+}
+
+async function refreshStockPrices(){
+  const by={};
+  D.stocks.forEach(s=>{
+    if(!by[s.ticker])by[s.ticker]={buys:[],sells:[]};
+    if(s.type==='買入')by[s.ticker].buys.push(s);
+    else if(s.type==='賣出')by[s.ticker].sells.push(s);
+  });
+  const holdingTickers=Object.entries(by)
+    .filter(([,d])=>{
+      const bs=d.buys.reduce((s,b)=>s+Number(b.shares||0),0);
+      const ss=d.sells.reduce((s,v)=>s+Number(v.shares||0),0);
+      return bs-ss>0;
+    }).map(([t])=>t);
+  const btn=document.getElementById('price-refresh-btn');
+  if(btn){btn.textContent='⏳';btn.disabled=true;}
+  await fetchStockPrices(holdingTickers);
+  renderStocks();
+  if(btn){btn.textContent='🔄';btn.disabled=false;}
+}
+
 function renderStocks(){
   const by={};
   D.stocks.forEach(s=>{
@@ -1440,19 +1514,52 @@ function renderStocks(){
   const holding=rows.filter(r=>r.remain>0).sort((a,b)=>a.ticker.localeCompare(b.ticker));
   const totalCost=holding.reduce((s,r)=>s+r.avg*r.remain,0);
   document.getElementById('inventory-summary').textContent=holding.length?`${holding.length} 支股票`:'';
+  let totalUnrealized=0,hasPrice=false;
   document.getElementById('inventory-list').innerHTML=holding.length
-    ?holding.map(r=>`<div class="inv-row">
+    ?holding.map(r=>{
+      const pc=stockPriceCache[r.ticker];
+      let priceHtml='';
+      if(pc){
+        hasPrice=true;
+        const mktVal=pc.price*r.remain;
+        const unreal=mktVal-r.avg*r.remain;
+        totalUnrealized+=unreal;
+        const sign=unreal>=0?'+':'';
+        const col=unreal>=0?'var(--accent)':'var(--red)';
+        const chgCol=pc.change>=0?'var(--accent)':'var(--red)';
+        const chgStr=(pc.change>=0?'+':'')+pc.change.toFixed(2);
+        const pctStr=(pc.change>=0?'+':'')+parseFloat(pc.pct).toFixed(2);
+        priceHtml=`<div style="font-size:11px;margin-top:3px">現 <b style="color:var(--text)">$${fmt(pc.price)}</b> <span style="color:${chgCol}">${chgStr}(${pctStr}%)</span></div><div style="font-size:12px;font-weight:700;color:${col};margin-top:1px">未實現 ${sign}${fmt(Math.round(unreal))}</div>`;
+      }
+      return`<div class="inv-row">
         <span class="inv-ticker">${r.ticker}</span>
         <span class="inv-name">${r.name}</span>
         <div class="inv-right">
-          <div class="inv-shares">${fmt(r.remain)} 股</div>
-          <div class="inv-cost">均 $${fmt(Math.round(r.avg))} ‧ 總 $${fmt(Math.round(r.avg*r.remain))}</div>
+          <div class="inv-shares">${fmt(r.remain)} 股 ‧ 均 $${fmt(Math.round(r.avg))}</div>
+          <div class="inv-cost">總成本 NT$${fmt(Math.round(r.avg*r.remain))}</div>
+          ${priceHtml}
         </div>
-      </div>`).join('')
+      </div>`;
+    }).join('')
     :'<div class="empty" style="padding:16px">目前無持股</div>';
   const totEl=document.getElementById('inventory-total');
   if(holding.length){totEl.style.display='flex';document.getElementById('inventory-total-val').textContent=`NT$ ${fmt(Math.round(totalCost))}`;}
   else{totEl.style.display='none';}
+  const unrEl=document.getElementById('unrealized-pnl-row');
+  if(unrEl){
+    if(hasPrice&&holding.length){
+      unrEl.style.display='flex';
+      const uv=document.getElementById('unrealized-pnl-val');
+      uv.textContent=`NT$ ${totalUnrealized>=0?'+':''}${fmt(Math.round(totalUnrealized))}`;
+      uv.style.color=totalUnrealized>=0?'var(--accent)':'var(--red)';
+    }else{unrEl.style.display='none';}
+  }
+  const lbl=document.getElementById('price-updated-label');
+  if(lbl&&stockPriceUpdated){
+    const hh=String(stockPriceUpdated.getHours()).padStart(2,'0');
+    const mm=String(stockPriceUpdated.getMinutes()).padStart(2,'0');
+    lbl.textContent=`${hh}:${mm} 更新`;
+  }
 
   const rSell=document.getElementById('realized-sell-pnl');
   rSell.textContent=`NT$ ${fmt(Math.round(totalSell))}`;
@@ -2045,7 +2152,7 @@ Object.assign(window,{
   switchTab,setCCView,openExpenseModal,editExpense,delExpense,
   toggleInst,buildInstFields,saveExpense,
   openBankManager,renderBankManager,addBankInManager,saveBankManager,setupDefaultCards,
-  handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,
+  getExpBillingMonth,handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,
   openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,calcStockTotal,calcTradeAmt,calcDivIncome,renderDividends,setStockListView,
   openSymbolManager,renderSymbolManager,addSymbolInManager,deleteSymbol,moveSymbol,onTickerInput,onNameInput,
   addOvRow,renderOverview,setOvAmt,toggleOvConf,toggleNoMonth,delOvRow,recalcOverview,renderOvChart,
