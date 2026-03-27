@@ -479,10 +479,18 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
         </div>
         <input type="hidden" id="st-type" value="買入">
         <label>日期</label><input type="date" id="st-date">
+        <label>交易類別</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="st-trade-type" style="flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 11px;font-size:13px"></select>
+          <button type="button" onclick="addStockTradeType()" style="background:var(--bg3);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:9px 10px;font-size:12px;cursor:pointer;white-space:nowrap">＋自訂</button>
+        </div>
         <label>代號</label><input type="text" id="st-ticker" placeholder="2330">
         <label>名稱</label><input type="text" id="st-name" placeholder="台積電">
         <label id="lbl-st-shares">股數</label><input type="number" id="st-shares" placeholder="0">
         <label id="lbl-st-price">單價</label><input type="number" id="st-price" placeholder="0">
+        <label>成交金額</label><input type="number" id="st-trade-amt" placeholder="0">
+        <label>手續費</label><input type="number" id="st-commission" placeholder="0">
+        <label>代徵交易稅</label><input type="number" id="st-tax" placeholder="0">
         <label>總金額</label><input type="number" id="st-amount" placeholder="0">
         <label>備註</label><textarea id="st-note" placeholder="選填"></textarea>
         <div class="form-actions"><button class="btn btn-secondary" onclick="closeModal('stock-modal')">取消</button><button class="btn btn-primary" onclick="saveStock()">儲存</button></div>
@@ -621,6 +629,7 @@ function defaultData(){
       ]
     },
     persons:[],debts:[],stocks:[],
+    stockTradeTypes:['普買','普賣'],
     gold:{buys:[],sells:[],currentPrice:0},
     rsu:{entries:[],futurePlanned:[]},
     cardOwners:['孟青','景翔']
@@ -667,6 +676,7 @@ function runMigrate(){
     if(!D.persons)D.persons=[];
     if(!D.debts)D.debts=[];
     if(!D.stocks)D.stocks=[];
+    if(!D.stockTradeTypes)D.stockTradeTypes=['普買','普賣'];
     if(!D.expenses)D.expenses=[];
     if(!D.payments)D.payments={};
     if(!D.bills)D.bills={};
@@ -1250,8 +1260,8 @@ function renderStocks(){
   document.getElementById('stock-list').innerHTML=D.stocks.sort((a,b)=>b.date.localeCompare(a.date)).map(s=>`<div class="expense-row">
     <div class="exp-dot" style="background:${s.type==='買入'?'var(--red)':s.type==='賣出'?'var(--accent)':'var(--yellow)'}"></div>
     <div class="exp-info">
-      <div class="exp-name">${s.ticker} ${s.name} <span class="cat-badge">${s.type}</span></div>
-      <div class="exp-meta">${s.date}${s.shares?` · ${s.shares}股 @ ${s.price}`:''}</div>
+      <div class="exp-name">${s.ticker} ${s.name} <span class="cat-badge">${s.type}</span>${s.tradeType?`<span class="cat-badge" style="color:var(--accent2)">${s.tradeType}</span>`:''}</div>
+      <div class="exp-meta">${s.date}${s.shares?` · ${s.shares}股 @ ${s.price}`:''}${s.commission?` · 手續費$${fmt(s.commission)}`:''}${s.tax?` · 交易稅$${fmt(s.tax)}`:''}</div>
       ${s.note?`<div class="exp-note-text">${s.note}</div>`:''}
     </div>
     <div class="exp-right">
@@ -1260,6 +1270,24 @@ function renderStocks(){
     </div>
   </div>`).join('');
 }
+function buildStockTradeTypeSelect(selected){
+  const sel=document.getElementById('st-trade-type');
+  sel.innerHTML=(D.stockTradeTypes||['普買','普賣']).map(t=>`<option value="${t}"${t===selected?' selected':''}>${t}</option>`).join('');
+  if(selected&&!(D.stockTradeTypes||[]).includes(selected)){
+    sel.innerHTML+=`<option value="${selected}" selected>${selected}</option>`;
+  }
+}
+function addStockTradeType(){
+  const name=prompt('輸入自訂交易類別名稱：','');
+  if(!name||!name.trim())return;
+  const t=name.trim();
+  if(!(D.stockTradeTypes||[]).includes(t)){
+    if(!D.stockTradeTypes)D.stockTradeTypes=['普買','普賣'];
+    D.stockTradeTypes.push(t);
+    save();
+  }
+  buildStockTradeTypeSelect(t);
+}
 function openStockModal(id){
   editStockId=id||null;
   document.getElementById('stock-modal-title').textContent=id?'編輯':'新增股票';
@@ -1267,16 +1295,21 @@ function openStockModal(id){
   if(s){
     setStockType(s.type,null);
     document.getElementById('st-date').value=s.date;
+    buildStockTradeTypeSelect(s.tradeType||'');
     document.getElementById('st-ticker').value=s.ticker;
     document.getElementById('st-name').value=s.name;
     document.getElementById('st-shares').value=s.shares||'';
     document.getElementById('st-price').value=s.price||'';
+    document.getElementById('st-trade-amt').value=s.tradeAmt||'';
+    document.getElementById('st-commission').value=s.commission||'';
+    document.getElementById('st-tax').value=s.tax||'';
     document.getElementById('st-amount').value=s.amount||'';
     document.getElementById('st-note').value=s.note||'';
   } else {
     document.getElementById('st-type').value='買入';
     document.getElementById('st-date').value=new Date().toISOString().slice(0,10);
-    ['st-ticker','st-name','st-shares','st-price','st-amount','st-note'].forEach(k=>document.getElementById(k).value='');
+    buildStockTradeTypeSelect('');
+    ['st-ticker','st-name','st-shares','st-price','st-trade-amt','st-commission','st-tax','st-amount','st-note'].forEach(k=>document.getElementById(k).value='');
     document.querySelectorAll('#stock-modal .type-pills .pill').forEach((p,i)=>p.classList.toggle('active',i===0));
     ['lbl-st-shares','st-shares','lbl-st-price','st-price'].forEach(k=>document.getElementById(k).style.display='block');
   }
@@ -1290,12 +1323,12 @@ function setStockType(t,btn){
 }
 function saveStock(){
   const ticker=document.getElementById('st-ticker').value.trim();if(!ticker){alert('請輸入代號');return;}
-  const s={id:editStockId||uid(),type:document.getElementById('st-type').value,date:document.getElementById('st-date').value,ticker,name:document.getElementById('st-name').value,shares:document.getElementById('st-shares').value,price:document.getElementById('st-price').value,amount:document.getElementById('st-amount').value,note:document.getElementById('st-note').value};
+  const s={id:editStockId||uid(),type:document.getElementById('st-type').value,date:document.getElementById('st-date').value,tradeType:document.getElementById('st-trade-type').value,ticker,name:document.getElementById('st-name').value,shares:document.getElementById('st-shares').value,price:document.getElementById('st-price').value,tradeAmt:document.getElementById('st-trade-amt').value,commission:document.getElementById('st-commission').value,tax:document.getElementById('st-tax').value,amount:document.getElementById('st-amount').value,note:document.getElementById('st-note').value};
   D.stocks=editStockId?D.stocks.map(x=>x.id===editStockId?s:x):[...D.stocks,s];
   save();closeModal('stock-modal');renderStocks();
 }
 function editStock(id){openStockModal(id);}
-  function delStock(id){if(!confirm('確定刪除？'))return;D.stocks=D.stocks.filter(s=>s.id!==id);save();renderStocks();}
+function delStock(id){if(!confirm('確定刪除？'))return;D.stocks=D.stocks.filter(s=>s.id!==id);save();renderStocks();}
 
 // ═══════════════════════════════════════════════
 //  DEBT
@@ -1568,7 +1601,7 @@ Object.assign(window,{
   toggleInst,buildInstFields,saveExpense,
   openBankManager,renderBankManager,addBankInManager,saveBankManager,
   handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,
-  openStockModal,editStock,delStock,setStockType,saveStock,
+  openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,
   addOvRow,renderOverview,setOvAmt,toggleOvConf,toggleNoMonth,delOvRow,recalcOverview,renderOvChart,
   openRSUModal,openRSUEdit,saveRSU,delRSU,delRSUFuture,
   openDebtModal,editDebt,delDebt,setDebtDir,saveDebt,
