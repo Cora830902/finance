@@ -1294,7 +1294,8 @@ function saveStock(){
   D.stocks=editStockId?D.stocks.map(x=>x.id===editStockId?s:x):[...D.stocks,s];
   save();closeModal('stock-modal');renderStocks();
 }
-function delStock(id){if(!confirm('確定刪除？'))return;D.stocks=D.stocks.filter(s=>s.id!==id);save();renderStocks();}
+function editStock(id){openStockModal(id);}
+  function delStock(id){if(!confirm('確定刪除？'))return;D.stocks=D.stocks.filter(s=>s.id!==id);save();renderStocks();}
 
 // ═══════════════════════════════════════════════
 //  DEBT
