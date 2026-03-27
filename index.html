@@ -188,6 +188,20 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
 .snapshot-item{background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .snapshot-time{font-size:11px;color:var(--muted);flex:1}
 .snapshot-size{font-size:10px;color:var(--muted)}
+
+/* ─ Dividend section ─ */
+.div-ticker-block{margin-bottom:16px}
+.div-ticker-header{font-size:13px;font-weight:700;color:var(--accent2);margin-bottom:6px;display:flex;align-items:baseline;gap:6px}
+.div-record-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1a2d3f;font-size:12px}
+.div-record-row:last-child{border-bottom:none}
+.div-ticker-subtotal{text-align:right;font-family:var(--mono);font-size:12px;color:var(--yellow);margin-top:5px;padding-top:5px;border-top:1px dashed var(--border)}
+.div-grand-total-box{background:var(--bg3);border-radius:8px;padding:11px 14px;font-family:var(--mono);font-size:14px;font-weight:700;color:var(--yellow);text-align:center;margin-top:12px}
+
+/* ─ Card expense mini-list ─ */
+.card-exp-item{display:flex;align-items:center;gap:6px;padding:4px 0 4px 14px;border-top:1px solid #1a2d3f;font-size:11px}
+.card-exp-date{color:var(--muted);min-width:78px;flex-shrink:0}
+.card-exp-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-exp-amt{font-family:var(--mono);color:var(--text);flex-shrink:0}
 </style>
 </head>
 <body>
@@ -353,7 +367,15 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">累計損益趨勢</div>
       <canvas id="pnl-chart" height="170"></canvas>
     </div>
+    <div class="section-divider" style="margin-top:10px">▸ 買入 / 賣出 明細</div>
     <div class="expense-list" id="stock-list"></div>
+
+    <!-- 配息專區 -->
+    <div id="div-section" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:16px">
+      <div style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:12px">💰 配息記錄</div>
+      <div id="div-records-list"></div>
+      <div id="div-grand-total" class="div-grand-total-box" style="display:none"></div>
+    </div>
   </div>
 
   <!-- ══ 借貸 ══ -->
@@ -503,6 +525,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <div id="bank-manager-list"></div>
       <div style="display:flex;gap:8px;margin-top:12px">
         <button class="btn btn-primary" style="flex:1" onclick="addBankInManager()">＋ 新增銀行</button>
+        <button class="btn btn-danger" onclick="setupDefaultCards()">🔄 重設預設卡片</button>
       </div>
       <div class="form-actions"><button class="btn btn-primary" onclick="saveBankManager()">儲存</button></div>
     </div>
@@ -838,19 +861,35 @@ function renderCC(){
       bankBill+=bill;
       const billConf=isBillConfirmed(c.id,mo);
       const paidConf=isPaidConfirmed(c.id,mo);
-      return`<div class="card-row">
-        <div class="card-dot" style="background:${b.color}"></div>
-        <div class="card-info">
-          <div class="card-name-text">${c.name}</div>
-          <div class="card-last4"><span style="color:var(--accent2)">${c.owner||''}</span>${c.owner?' · ':''}<span style="color:var(--muted)">${b.name}</span> · ${c.last4}</div>
+      // 該卡本月消費明細
+      const cardExps=D.expenses.filter(e=>e.cardId===c.id&&e.date&&e.date.startsWith(mo)).sort((a,b)=>b.date.localeCompare(a.date));
+      const cardExpHTML=cardExps.length
+        ?cardExps.map(e=>{
+            const total=e.isInstallment?e.installments.reduce((s,i)=>s+Number(i.amount||0),0):Number(e.amount||0);
+            return`<div class="card-exp-item">
+              <span class="card-exp-date">${e.date}</span>
+              <span class="card-exp-name">${e.name}${e.category?` <span class="cat-badge">${e.category}</span>`:''}</span>
+              <span class="card-exp-amt">$${fmt(total)}</span>
+              <button onclick="editExpense('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:0 2px">✏</button>
+            </div>`;
+          }).join('')
+        :'';
+      return`<div>
+        <div class="card-row">
+          <div class="card-dot" style="background:${b.color}"></div>
+          <div class="card-info">
+            <div class="card-name-text">${c.name}</div>
+            <div class="card-last4"><span style="color:var(--accent2)">${c.owner||''}</span>${c.owner?' · ':''}<span style="color:var(--muted)">${b.name}</span>${c.last4?' · '+c.last4:''}</div>
+          </div>
+          <div class="card-amounts">
+            <span class="card-bill-val ${billConf?'confirmed':''}" title="點擊切換確認" onclick="toggleBillConfirm('${c.id}','${mo}')">帳$${fmt(bill)}</span>
+            <span class="slash">/</span>
+            <span class="card-paid-val ${paidConf?'confirmed':''}" title="點擊切換已繳確認" onclick="togglePaidConfirm('${c.id}','${mo}',event)">繳$${fmt(paid)}</span>
+            ${unpaid>0?`<span class="slash">/</span><span class="card-unpaid-val">欠$${fmt(unpaid)}</span>`:''}
+          </div>
+          <button class="card-edit-btn" onclick="openCardPayModal('${c.id}','${mo}')">✏</button>
         </div>
-        <div class="card-amounts">
-          <span class="card-bill-val ${billConf?'confirmed':''}" title="點擊切換確認" onclick="toggleBillConfirm('${c.id}','${mo}')">帳$${fmt(bill)}</span>
-          <span class="slash">/</span>
-          <span class="card-paid-val ${paidConf?'confirmed':''}" title="點擊切換已繳確認" onclick="togglePaidConfirm('${c.id}','${mo}',event)">繳$${fmt(paid)}</span>
-          ${unpaid>0?`<span class="slash">/</span><span class="card-unpaid-val">欠$${fmt(unpaid)}</span>`:''}
-        </div>
-        <button class="card-edit-btn" onclick="openCardPayModal('${c.id}','${mo}')">✏</button>
+        ${cardExpHTML}
       </div>`;
     }).join('');
     bankHTML+=`<div class="bank-block">
@@ -1047,6 +1086,31 @@ function addBankInManager(){
 }
 function saveBankManager(){
   D.banks=bankMgrState;save();closeModal('bank-modal');rebuildExpCardSelect();renderCC();
+}
+function setupDefaultCards(){
+  if(!confirm('此操作將清除所有現有銀行/卡片設定並套用預設清單。\n消費明細資料不受影響，但卡片連結將需重新設定。\n確定要繼續嗎？'))return;
+  bankMgrState=[
+    {id:uid(),name:'星展',color:'#6EE7B7',cards:[
+      {id:uid(),name:'孟青',last4:'8764',owner:'孟青'},
+      {id:uid(),name:'景翔PC',last4:'1773',owner:'景翔'},
+      {id:uid(),name:'景翔ECO',last4:'6529',owner:'景翔'},
+      {id:uid(),name:'景翔ECO(附卡)',last4:'3074',owner:'景翔'},
+    ]},
+    {id:uid(),name:'國泰',color:'#A5B4FC',cards:[
+      {id:uid(),name:'孟青',last4:'',owner:'孟青'},
+      {id:uid(),name:'景翔',last4:'',owner:'景翔'},
+    ]},
+    {id:uid(),name:'台新',color:'#FB923C',cards:[
+      {id:uid(),name:'孟青',last4:'',owner:'孟青'},
+    ]},
+    {id:uid(),name:'華南',color:'#F9A8D4',cards:[
+      {id:uid(),name:'孟青',last4:'',owner:'孟青'},
+    ]},
+    {id:uid(),name:'富邦',color:'#FDE68A',cards:[
+      {id:uid(),name:'孟青Costco',last4:'',owner:'孟青'},
+    ]},
+  ];
+  renderBankManager();
 }
 
 // ═══════════════════════════════════════════════
@@ -1353,8 +1417,8 @@ function renderStocks(){
     if(pnlChart)pnlChart.destroy();
     pnlChart=new Chart(ctx,{type:'line',data:{labels:cd.map(d=>d.m),datasets:[{data:cd.map(d=>d.v),borderColor:'#6EE7B7',backgroundColor:'rgba(110,231,183,.1)',pointBackgroundColor:'#6EE7B7',tension:.3,fill:true}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:v=>`NT$ ${fmt(Math.round(v.raw))}`}}},scales:{x:{ticks:{color:'#64748b',font:{size:10}},grid:{color:'#1e2d3d'}},y:{ticks:{color:'#64748b',font:{size:10},callback:v=>`${Math.round(v/1000)}K`},grid:{color:'#1e2d3d'}}}}});
   }
-  document.getElementById('stock-list').innerHTML=D.stocks.sort((a,b)=>b.date.localeCompare(a.date)).map(s=>{
-    const isDiv=s.type==='配息';
+  document.getElementById('stock-list').innerHTML=D.stocks.filter(s=>s.type!=='配息').sort((a,b)=>b.date.localeCompare(a.date)).map(s=>{
+    const isDiv=false;
     const meta=isDiv
       ?`${s.date}${s.shares?` · ${s.shares}股`:''}${s.divPerShare?` · 每股$${s.divPerShare}`:''}${s.divYield?` · 殖利率${s.divYield}%`:''}${s.divExDate?` · 除息${s.divExDate}`:''}`
       :`${s.date}${s.shares?` · ${s.shares}股 @ ${s.price}`:''}${s.commission?` · 手續費$${fmt(s.commission)}`:''}${s.tax?` · 交易稅$${fmt(s.tax)}`:''}`
@@ -1376,6 +1440,41 @@ function renderStocks(){
     </div>
   </div>`;
   }).join('');
+  renderDividends();
+}
+function renderDividends(){
+  const divs=D.stocks.filter(s=>s.type==='配息').sort((a,b)=>a.date.localeCompare(b.date));
+  const sec=document.getElementById('div-section');
+  const gtEl=document.getElementById('div-grand-total');
+  if(!divs.length){sec.style.display='none';return;}
+  sec.style.display='block';
+  const byTicker={};
+  divs.forEach(s=>{
+    if(!byTicker[s.ticker])byTicker[s.ticker]={ticker:s.ticker,name:s.name,records:[]};
+    byTicker[s.ticker].records.push(s);
+  });
+  let grandTotal=0;
+  let html='';
+  Object.values(byTicker).forEach(t=>{
+    const tot=t.records.reduce((s,r)=>s+Number(r.amount||0),0);
+    grandTotal+=tot;
+    html+=`<div class="div-ticker-block">
+      <div class="div-ticker-header">${t.ticker}<span style="font-weight:400;color:var(--muted);font-size:11px;margin-left:4px">${t.name}</span></div>
+      <div style="border-left:2px solid var(--border);margin-left:6px;padding-left:8px">
+        ${t.records.map(r=>`<div class="div-record-row">
+          <span class="card-exp-date">${r.date}</span>
+          ${r.shares?`<span style="color:var(--muted)">${r.shares}股</span>`:''}
+          <span style="flex:1;font-family:var(--mono);color:var(--accent)">NT$ ${fmt(Number(r.amount||0))}</span>
+          <button onclick="openStockModal('${r.id}')" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted)">✏</button>
+          <button onclick="delStock('${r.id}')" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted)">🗑</button>
+        </div>`).join('')}
+      </div>
+      <div class="div-ticker-subtotal">─── ${t.ticker} 總計 NT$ ${fmt(tot)} ───</div>
+    </div>`;
+  });
+  document.getElementById('div-records-list').innerHTML=html;
+  gtEl.style.display='block';
+  gtEl.textContent=`══ 已領總計 NT$ ${fmt(grandTotal)} ══`;
 }
 function buildSymbolDatalist(){
   const syms=D.stockSymbols||[];
@@ -1874,9 +1973,9 @@ document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click
 Object.assign(window,{
   switchTab,setCCView,openExpenseModal,editExpense,delExpense,
   toggleInst,buildInstFields,saveExpense,
-  openBankManager,renderBankManager,addBankInManager,saveBankManager,
+  openBankManager,renderBankManager,addBankInManager,saveBankManager,setupDefaultCards,
   handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,
-  openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,calcStockTotal,calcTradeAmt,calcDivIncome,
+  openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,calcStockTotal,calcTradeAmt,calcDivIncome,renderDividends,
   openSymbolManager,renderSymbolManager,addSymbolInManager,deleteSymbol,moveSymbol,onTickerInput,onNameInput,
   addOvRow,renderOverview,setOvAmt,toggleOvConf,toggleNoMonth,delOvRow,recalcOverview,renderOvChart,
   openRSUModal,openRSUEdit,saveRSU,delRSU,delRSUFuture,
