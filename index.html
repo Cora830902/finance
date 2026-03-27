@@ -344,10 +344,18 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       </div>
     </div>
 
-    <div class="stock-sum-wrap" style="display:flex;gap:8px;margin-bottom:12px">
-      <div style="flex:1;border-radius:12px;padding:12px 14px;border:1px solid #1d5c3e;background:#0e2d22">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">已實現總損益</div>
-        <div style="font-family:var(--mono);font-size:17px;font-weight:700" id="realized-pnl">NT$ 0</div>
+    <div style="background:#0e2d22;border:1px solid #1d5c3e;border-radius:12px;padding:12px 14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:10px;color:var(--muted)">賣出損益</span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:700" id="realized-sell-pnl">NT$ 0</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-size:10px;color:var(--muted)">配息收入</span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--yellow)" id="realized-div-total">NT$ 0</span>
+      </div>
+      <div style="border-top:1px solid #1d5c3e;padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;color:var(--muted)">含配息總損益</span>
+        <span style="font-family:var(--mono);font-size:18px;font-weight:700" id="realized-pnl">NT$ 0</span>
       </div>
     </div>
     <div style="overflow-x:auto;margin-bottom:12px;border-radius:10px;border:1px solid var(--border)">
@@ -1364,17 +1372,19 @@ function renderStocks(){
     else if(s.type==='賣出')by[s.ticker].sells.push(s);
     else by[s.ticker].div+=Number(s.amount||0);
   });
-  let total=0;
+  let totalSell=0, totalDiv=0;
   const rows=Object.values(by).map(t=>{
     const ba=t.buys.reduce((s,b)=>s+Math.abs(Number(b.amount||0)),0);
     const bs=t.buys.reduce((s,b)=>s+Number(b.shares||0),0);
     const sa=t.sells.reduce((s,v)=>s+Math.abs(Number(v.amount||0)),0);
     const ss=t.sells.reduce((s,v)=>s+Number(v.shares||0),0);
     const avg=bs>0?ba/bs:0;
-    const pnl=sa-avg*ss+t.div;
-    total+=pnl;
+    const pnl=sa-avg*ss;   // 純賣出損益（不含配息）
+    totalSell+=pnl;
+    totalDiv+=t.div;
     return{...t,remain:bs-ss,avg,pnl};
   });
+  const total=totalSell+totalDiv;
   // ── 目前總庫存 ──
   const holding=rows.filter(r=>r.remain>0).sort((a,b)=>a.ticker.localeCompare(b.ticker));
   const totalCost=holding.reduce((s,r)=>s+r.avg*r.remain,0);
@@ -1393,6 +1403,10 @@ function renderStocks(){
   if(holding.length){totEl.style.display='flex';document.getElementById('inventory-total-val').textContent=`NT$ ${fmt(Math.round(totalCost))}`;}
   else{totEl.style.display='none';}
 
+  const rSell=document.getElementById('realized-sell-pnl');
+  rSell.textContent=`NT$ ${fmt(Math.round(totalSell))}`;
+  rSell.style.color=totalSell>=0?'var(--accent)':'var(--red)';
+  document.getElementById('realized-div-total').textContent=`NT$ ${fmt(Math.round(totalDiv))}`;
   const rEl=document.getElementById('realized-pnl');
   rEl.textContent=`NT$ ${fmt(Math.round(total))}`;
   rEl.style.color=total>=0?'var(--accent)':'var(--red)';
