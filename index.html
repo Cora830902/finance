@@ -1270,9 +1270,9 @@ function renderStocks(){
   });
   let total=0;
   const rows=Object.values(by).map(t=>{
-    const ba=t.buys.reduce((s,b)=>s+Number(b.amount||0),0);
+    const ba=t.buys.reduce((s,b)=>s+Math.abs(Number(b.amount||0)),0);
     const bs=t.buys.reduce((s,b)=>s+Number(b.shares||0),0);
-    const sa=t.sells.reduce((s,v)=>s+Number(v.amount||0),0);
+    const sa=t.sells.reduce((s,v)=>s+Math.abs(Number(v.amount||0)),0);
     const ss=t.sells.reduce((s,v)=>s+Number(v.shares||0),0);
     const avg=bs>0?ba/bs:0;
     const pnl=sa-avg*ss+t.div;
@@ -1294,7 +1294,7 @@ function renderStocks(){
     :'<tr><td colspan="6" class="empty">尚無記錄</td></tr>';
 
   const map={};
-  D.stocks.forEach(s=>{const m=s.date?.slice(0,7);if(!m)return;if(!map[m])map[m]=0;map[m]+=(s.type==='買入'?-1:1)*Number(s.amount||0);});
+  D.stocks.forEach(s=>{const m=s.date?.slice(0,7);if(!m)return;if(!map[m])map[m]=0;map[m]+=(s.type==='買入'?-1:1)*Math.abs(Number(s.amount||0));});
   const mos=Object.keys(map).sort();let cum=0;
   const cd=mos.map(m=>{cum+=map[m];return{m,v:cum}});
   if(cd.length){
