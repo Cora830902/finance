@@ -1435,7 +1435,7 @@ function renderStocks(){
       ${s.note?`<div class="exp-note-text">${s.note}</div>`:''}
     </div>
     <div class="exp-right">
-      <div class="exp-amt pos">${amtDisp}</div>
+      <div class="exp-amt ${s.type==='買入'?'neg':'pos'}">${amtDisp}</div>
       <div class="exp-actions"><button onclick="openStockModal('${s.id}')">✏</button><button onclick="delStock('${s.id}')">🗑</button></div>
     </div>
   </div>`;
