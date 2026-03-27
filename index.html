@@ -495,10 +495,10 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
         <datalist id="st-name-list"></datalist>
         <label id="lbl-st-shares">股數</label><input type="number" id="st-shares" placeholder="0">
         <label id="lbl-st-price">單價</label><input type="number" id="st-price" placeholder="0">
-        <label>成交金額</label><input type="number" id="st-trade-amt" placeholder="0">
-        <label>手續費</label><input type="number" id="st-commission" placeholder="0">
-        <label>代徵交易稅</label><input type="number" id="st-tax" placeholder="0">
-        <label>總金額</label><input type="number" id="st-amount" placeholder="0">
+        <label>成交金額</label><input type="number" id="st-trade-amt" placeholder="0" oninput="calcStockTotal()">
+        <label>手續費</label><input type="number" id="st-commission" placeholder="0" oninput="calcStockTotal()">
+        <label>代徵交易稅</label><input type="number" id="st-tax" placeholder="0" oninput="calcStockTotal()">
+        <label>總金額<br><span style="font-size:10px;color:var(--muted);font-weight:400">應收(+)付(-)</span></label><input type="number" id="st-amount" placeholder="自動計算" style="color:var(--accent)">
         <label>備註</label><textarea id="st-note" placeholder="選填"></textarea>
         <div class="form-actions"><button class="btn btn-secondary" onclick="closeModal('stock-modal')">取消</button><button class="btn btn-primary" onclick="saveStock()">儲存</button></div>
       </div>
@@ -1400,6 +1400,20 @@ function setStockType(t,btn){
   if(btn)document.querySelectorAll('#stock-modal .type-pills .pill').forEach(p=>p.classList.toggle('active',p===btn));
   const d=t==='配息'?'none':'block';
   ['lbl-st-shares','st-shares','lbl-st-price','st-price'].forEach(k=>document.getElementById(k).style.display=d);
+  calcStockTotal();
+}
+function calcStockTotal(){
+  const type=document.getElementById('st-type').value;
+  const tradeAmt=Number(document.getElementById('st-trade-amt').value)||0;
+  const commission=Number(document.getElementById('st-commission').value)||0;
+  const tax=Number(document.getElementById('st-tax').value)||0;
+  let total=0;
+  if(type==='買入') total=-(tradeAmt+commission);
+  else if(type==='賣出') total=tradeAmt-commission-tax;
+  else total=tradeAmt; // 配息
+  const el=document.getElementById('st-amount');
+  el.value=total||'';
+  el.style.color=total>=0?'var(--accent)':'var(--red)';
 }
 function saveStock(){
   const ticker=document.getElementById('st-ticker').value.trim();if(!ticker){alert('請輸入股票代碼');return;}
@@ -1688,7 +1702,7 @@ Object.assign(window,{
   toggleInst,buildInstFields,saveExpense,
   openBankManager,renderBankManager,addBankInManager,saveBankManager,
   handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,
-  openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,
+  openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,calcStockTotal,
   openSymbolManager,renderSymbolManager,addSymbolInManager,deleteSymbol,moveSymbol,onTickerInput,onNameInput,
   addOvRow,renderOverview,setOvAmt,toggleOvConf,toggleNoMonth,delOvRow,recalcOverview,renderOvChart,
   openRSUModal,openRSUEdit,saveRSU,delRSU,delRSUFuture,
