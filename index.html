@@ -331,19 +331,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   <div class="tab-content" id="tab-2">
     <div class="filter-bar"><button class="btn-icon" onclick="openStockModal()">＋ 新增</button></div>
 
-    <!-- 目前總庫存 -->
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden">
-      <div style="background:var(--bg3);padding:11px 14px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:13px;font-weight:700;color:var(--accent)">📦 目前總庫存</span>
-        <span id="inventory-summary" style="font-size:11px;color:var(--muted)"></span>
-      </div>
-      <div id="inventory-list"><div class="empty" style="padding:16px">尚無持股</div></div>
-      <div id="inventory-total" style="display:none;padding:10px 14px;background:var(--bg3);display:flex;justify-content:space-between;font-size:12px;font-weight:700">
-        <span style="color:var(--muted)">總投入成本</span>
-        <span id="inventory-total-val" style="font-family:var(--mono);color:var(--yellow)"></span>
-      </div>
-    </div>
-
+    <!-- 1. 已實現總損益（永遠顯示全部total，不受明細篩選影響） -->
     <div style="background:#0e2d22;border:1px solid #1d5c3e;border-radius:12px;padding:12px 14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:10px;color:var(--muted)">賣出損益</span>
@@ -358,6 +346,8 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
         <span style="font-family:var(--mono);font-size:18px;font-weight:700" id="realized-pnl">NT$ 0</span>
       </div>
     </div>
+
+    <!-- 2. 總覽 -->
     <div style="overflow-x:auto;margin-bottom:12px;border-radius:10px;border:1px solid var(--border)">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="background:var(--bg3)">
@@ -375,14 +365,43 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">累計損益趨勢</div>
       <canvas id="pnl-chart" height="170"></canvas>
     </div>
-    <div class="section-divider" style="margin-top:10px">▸ 買入 / 賣出 明細</div>
-    <div class="expense-list" id="stock-list"></div>
 
-    <!-- 配息專區 -->
-    <div id="div-section" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:16px">
+    <!-- 3. 目前總庫存 -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden">
+      <div style="background:var(--bg3);padding:11px 14px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;font-weight:700;color:var(--accent)">📦 目前總庫存</span>
+        <span id="inventory-summary" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div id="inventory-list"><div class="empty" style="padding:16px">尚無持股</div></div>
+      <div id="inventory-total" style="display:none;padding:10px 14px;background:var(--bg3);display:flex;justify-content:space-between;font-size:12px;font-weight:700">
+        <span style="color:var(--muted)">總投入成本</span>
+        <span id="inventory-total-val" style="font-family:var(--mono);color:var(--yellow)"></span>
+      </div>
+    </div>
+
+    <!-- 4. 配息記錄 -->
+    <div id="div-section" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:12px">💰 配息記錄</div>
       <div id="div-records-list"></div>
       <div id="div-grand-total" class="div-grand-total-box" style="display:none"></div>
+    </div>
+
+    <!-- 5. 買入/賣出 明細（可篩選區間） -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--accent2);margin-bottom:10px">📋 買入 / 賣出 明細</div>
+      <div class="view-tabs" id="stock-list-view-tabs" style="margin-bottom:10px">
+        <div class="view-tab active" onclick="setStockListView('all',this)">全部</div>
+        <div class="view-tab" onclick="setStockListView('year',this)">今年</div>
+        <div class="view-tab" onclick="setStockListView('6m',this)">近6月</div>
+        <div class="view-tab" onclick="setStockListView('3m',this)">近3月</div>
+        <div class="view-tab" onclick="setStockListView('custom',this)">自訂</div>
+      </div>
+      <div id="stock-custom-range" style="display:none;flex-direction:row;gap:8px;margin-bottom:10px;align-items:center">
+        <input type="date" id="stock-range-from" onchange="renderStocks()" style="flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 10px;font-size:12px">
+        <span style="color:var(--muted);flex-shrink:0">—</span>
+        <input type="date" id="stock-range-to" onchange="renderStocks()" style="flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 10px;font-size:12px">
+      </div>
+      <div class="expense-list" id="stock-list"></div>
     </div>
   </div>
 
@@ -808,7 +827,7 @@ function initApp(){
 
 // ── Global vars ───────────────────────────────
 let editExpId=null,editStockId=null,editDebtId=null,editGoldId=null,goldModalType='buy';
-let pnlChart=null,ovChart=null,ccView='all';
+let pnlChart=null,ovChart=null,ccView='all',stockListView='all';
 function fmt(n){return Number(n||0).toLocaleString('zh-TW')}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function allCards(){return D.banks.flatMap(b=>b.cards.map(c=>({...c,bankId:b.id,bankName:b.name,color:b.color,owner:c.owner||''})))}
@@ -1364,6 +1383,35 @@ function renderOvChart(){
 // ═══════════════════════════════════════════════
 //  STOCKS
 // ═══════════════════════════════════════════════
+function setStockListView(v,btn){
+  stockListView=v;
+  document.querySelectorAll('#stock-list-view-tabs .view-tab').forEach(t=>t.classList.toggle('active',t===btn));
+  const customRow=document.getElementById('stock-custom-range');
+  customRow.style.display=v==='custom'?'flex':'none';
+  renderStocks();
+}
+function getStockListDateFilter(){
+  if(stockListView==='all')return null;
+  const today=new Date();
+  if(stockListView==='year'){
+    const yr=today.getFullYear();
+    return{from:`${yr}-01-01`,to:`${yr}-12-31`};
+  }
+  if(stockListView==='6m'){
+    const d=new Date(today);d.setMonth(d.getMonth()-6);
+    return{from:d.toISOString().slice(0,10),to:today.toISOString().slice(0,10)};
+  }
+  if(stockListView==='3m'){
+    const d=new Date(today);d.setMonth(d.getMonth()-3);
+    return{from:d.toISOString().slice(0,10),to:today.toISOString().slice(0,10)};
+  }
+  if(stockListView==='custom'){
+    const f=document.getElementById('stock-range-from')?.value;
+    const t=document.getElementById('stock-range-to')?.value;
+    return(f||t)?{from:f||'0000-01-01',to:t||'9999-12-31'}:null;
+  }
+  return null;
+}
 function renderStocks(){
   const by={};
   D.stocks.forEach(s=>{
@@ -1431,7 +1479,13 @@ function renderStocks(){
     if(pnlChart)pnlChart.destroy();
     pnlChart=new Chart(ctx,{type:'line',data:{labels:cd.map(d=>d.m),datasets:[{data:cd.map(d=>d.v),borderColor:'#6EE7B7',backgroundColor:'rgba(110,231,183,.1)',pointBackgroundColor:'#6EE7B7',tension:.3,fill:true}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:v=>`NT$ ${fmt(Math.round(v.raw))}`}}},scales:{x:{ticks:{color:'#64748b',font:{size:10}},grid:{color:'#1e2d3d'}},y:{ticks:{color:'#64748b',font:{size:10},callback:v=>`${Math.round(v/1000)}K`},grid:{color:'#1e2d3d'}}}}});
   }
-  document.getElementById('stock-list').innerHTML=D.stocks.filter(s=>s.type!=='配息').sort((a,b)=>b.date.localeCompare(a.date)).map(s=>{
+  const dateFilter=getStockListDateFilter();
+  const filteredList=D.stocks.filter(s=>{
+    if(s.type==='配息')return false;
+    if(!dateFilter)return true;
+    return s.date>=dateFilter.from&&s.date<=dateFilter.to;
+  }).sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('stock-list').innerHTML=filteredList.map(s=>{
     const isDiv=false;
     const meta=isDiv
       ?`${s.date}${s.shares?` · ${s.shares}股`:''}${s.divPerShare?` · 每股$${s.divPerShare}`:''}${s.divYield?` · 殖利率${s.divYield}%`:''}${s.divExDate?` · 除息${s.divExDate}`:''}`
@@ -1989,7 +2043,7 @@ Object.assign(window,{
   toggleInst,buildInstFields,saveExpense,
   openBankManager,renderBankManager,addBankInManager,saveBankManager,setupDefaultCards,
   handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,
-  openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,calcStockTotal,calcTradeAmt,calcDivIncome,renderDividends,
+  openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,calcStockTotal,calcTradeAmt,calcDivIncome,renderDividends,setStockListView,
   openSymbolManager,renderSymbolManager,addSymbolInManager,deleteSymbol,moveSymbol,onTickerInput,onNameInput,
   addOvRow,renderOverview,setOvAmt,toggleOvConf,toggleNoMonth,delOvRow,recalcOverview,renderOvChart,
   openRSUModal,openRSUEdit,saveRSU,delRSU,delRSUFuture,
