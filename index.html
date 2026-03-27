@@ -175,6 +175,15 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
 .view-tab{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:11px;cursor:pointer;color:var(--muted)}
 .view-tab.active{background:var(--accent);color:#0d1b2a;border-color:var(--accent);font-weight:700}
 
+/* ─ Inventory ─ */
+.inv-row{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #1a2d3f;gap:10px}
+.inv-row:last-child{border-bottom:none}
+.inv-ticker{font-family:var(--mono);font-size:12px;color:var(--accent2);min-width:44px}
+.inv-name{font-size:13px;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inv-right{text-align:right;flex-shrink:0}
+.inv-shares{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text)}
+.inv-cost{font-size:11px;color:var(--muted);margin-top:2px}
+
 /* ─ Backup ─ */
 .snapshot-item{background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .snapshot-time{font-size:11px;color:var(--muted);flex:1}
@@ -307,6 +316,20 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   <!-- ══ 股票 ══ -->
   <div class="tab-content" id="tab-2">
     <div class="filter-bar"><button class="btn-icon" onclick="openStockModal()">＋ 新增</button></div>
+
+    <!-- 目前總庫存 -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden">
+      <div style="background:var(--bg3);padding:11px 14px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;font-weight:700;color:var(--accent)">📦 目前總庫存</span>
+        <span id="inventory-summary" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div id="inventory-list"><div class="empty" style="padding:16px">尚無持股</div></div>
+      <div id="inventory-total" style="display:none;padding:10px 14px;background:var(--bg3);display:flex;justify-content:space-between;font-size:12px;font-weight:700">
+        <span style="color:var(--muted)">總投入成本</span>
+        <span id="inventory-total-val" style="font-family:var(--mono);color:var(--yellow)"></span>
+      </div>
+    </div>
+
     <div class="stock-sum-wrap" style="display:flex;gap:8px;margin-bottom:12px">
       <div style="flex:1;border-radius:12px;padding:12px 14px;border:1px solid #1d5c3e;background:#0e2d22">
         <div style="font-size:10px;color:var(--muted);margin-bottom:3px">已實現總損益</div>
@@ -1279,6 +1302,24 @@ function renderStocks(){
     total+=pnl;
     return{...t,remain:bs-ss,avg,pnl};
   });
+  // ── 目前總庫存 ──
+  const holding=rows.filter(r=>r.remain>0).sort((a,b)=>a.ticker.localeCompare(b.ticker));
+  const totalCost=holding.reduce((s,r)=>s+r.avg*r.remain,0);
+  document.getElementById('inventory-summary').textContent=holding.length?`${holding.length} 支股票`:'';
+  document.getElementById('inventory-list').innerHTML=holding.length
+    ?holding.map(r=>`<div class="inv-row">
+        <span class="inv-ticker">${r.ticker}</span>
+        <span class="inv-name">${r.name}</span>
+        <div class="inv-right">
+          <div class="inv-shares">${fmt(r.remain)} 股</div>
+          <div class="inv-cost">均 $${fmt(Math.round(r.avg))} ‧ 總 $${fmt(Math.round(r.avg*r.remain))}</div>
+        </div>
+      </div>`).join('')
+    :'<div class="empty" style="padding:16px">目前無持股</div>';
+  const totEl=document.getElementById('inventory-total');
+  if(holding.length){totEl.style.display='flex';document.getElementById('inventory-total-val').textContent=`NT$ ${fmt(Math.round(totalCost))}`;}
+  else{totEl.style.display='none';}
+
   const rEl=document.getElementById('realized-pnl');
   rEl.textContent=`NT$ ${fmt(Math.round(total))}`;
   rEl.style.color=total>=0?'var(--accent)':'var(--red)';
@@ -1727,11 +1768,11 @@ function doMergeImport(jsonText){
   catch{alert('❌ JSON 格式錯誤');return;}
   if(!parsed.stocks||!Array.isArray(parsed.stocks)){alert('❌ 這不是正確的股票匯入格式\n需要包含 "stocks" 陣列');return;}
   if(!D.stocks)D.stocks=[];
-  // 用「日期+代碼+股數+單價」做唯一鍵，避免重複
-  const existingKeys=new Set(D.stocks.map(s=>`${s.date}|${s.ticker}|${s.shares}|${s.price}`));
+  // 用「日期+代碼+股數+單價+備註」做唯一鍵，避免重複（同筆分批交易可用備註區分）
+  const existingKeys=new Set(D.stocks.map(s=>`${s.date}|${s.ticker}|${s.shares}|${s.price}|${s.note||''}`));
   let added=0,skipped=0;
   parsed.stocks.forEach(s=>{
-    const key=`${s.date}|${s.ticker}|${s.shares}|${s.price}`;
+    const key=`${s.date}|${s.ticker}|${s.shares}|${s.price}|${s.note||''}`;
     if(existingKeys.has(key)){skipped++;return;}
     D.stocks.push({...s,id:uid()});
     existingKeys.add(key);
