@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -51,6 +52,12 @@ input,select,button,textarea{font-family:var(--font)}
 .section-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
 .section-title{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--accent);display:flex;align-items:center;justify-content:space-between}
 .section-divider{font-size:11px;color:var(--muted);margin:10px 0 6px;letter-spacing:.5px}
+.tab-section-header{font-size:13px;font-weight:700;color:var(--accent2);padding:10px 0 6px;border-bottom:1px solid var(--border);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+/* ─ Quick Nav ─ */
+.quick-nav{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding:6px 0 10px;margin-bottom:2px}
+.quick-nav::-webkit-scrollbar{display:none}
+.qnav-btn{flex-shrink:0;background:var(--bg3);border:1px solid var(--border);color:var(--muted);border-radius:20px;padding:4px 12px;font-size:11px;cursor:pointer;white-space:nowrap}
+.qnav-btn:hover{background:var(--border);color:var(--text)}
 
 /* ─ Overview rows ─ */
 .ov-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 0;border-bottom:1px solid #1a2d3f}
@@ -241,6 +248,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     <div class="filter-bar">
       <input type="month" id="filter-month" onchange="renderCC()">
       <button class="btn-icon" onclick="openExpenseModal()">＋ 消費</button>
+      <button class="btn-ghost" onclick="openOcrModal()">📷 截圖匯入</button>
       <button class="btn-ghost" onclick="openBankManager()">🏦 銀行/卡片</button>
     </div>
     <!-- View tabs -->
@@ -249,9 +257,17 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <div class="view-tab" onclick="setCCView('monthly',this)">本月明細</div>
       <div class="view-tab" onclick="setCCView('yearly',this)">整年</div>
     </div>
+    <!-- Quick Nav -->
+    <div class="quick-nav" id="cc-quick-nav">
+      <button class="qnav-btn" onclick="document.getElementById('cc-summary').scrollIntoView({behavior:'smooth'})">📊 月摘要</button>
+      <button class="qnav-btn" onclick="document.getElementById('bank-list').scrollIntoView({behavior:'smooth'})">💳 各卡帳單</button>
+      <button class="qnav-btn" onclick="document.getElementById('expense-section').scrollIntoView({behavior:'smooth'})">📋 消費明細</button>
+    </div>
     <!-- Summary -->
+    <div class="tab-section-header">📊 本月摘要</div>
     <div class="summary-bar" id="cc-summary"></div>
     <!-- Banks -->
+    <div class="tab-section-header" style="margin-top:8px">💳 各卡帳單明細</div>
     <div id="bank-list"></div>
     <!-- Expense list -->
     <div id="expense-section">
@@ -265,6 +281,16 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     <div class="filter-bar">
       <input type="month" id="ov-month" onchange="renderOverview()">
     </div>
+    <!-- Quick Nav -->
+    <div class="quick-nav">
+      <button class="qnav-btn" onclick="document.getElementById('balance-card').scrollIntoView({behavior:'smooth'})">💰 剩餘</button>
+      <button class="qnav-btn" onclick="document.getElementById('ov-chart-section').scrollIntoView({behavior:'smooth'})">📈 趨勢圖</button>
+      <button class="qnav-btn" onclick="document.getElementById('ov-rsu-section').scrollIntoView({behavior:'smooth'})">📦 RSU</button>
+      <button class="qnav-btn" onclick="document.getElementById('ov-income-section').scrollIntoView({behavior:'smooth'})">💵 收入</button>
+      <button class="qnav-btn" onclick="document.getElementById('ov-fixed-section').scrollIntoView({behavior:'smooth'})">🏠 固定</button>
+      <button class="qnav-btn" onclick="document.getElementById('ov-var-section').scrollIntoView({behavior:'smooth'})">🔁 變動</button>
+      <button class="qnav-btn" onclick="document.getElementById('ov-cc-section').scrollIntoView({behavior:'smooth'})">💳 信用卡</button>
+    </div>
 
     <!-- 1. 本月總剩餘 -->
     <div class="balance-highlight" id="balance-card">
@@ -274,7 +300,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 2. 月份趨勢圖 -->
-    <div class="section-card" style="margin-top:10px">
+    <div class="section-card" id="ov-chart-section" style="margin-top:10px">
       <div class="section-title">📈 月份趨勢</div>
       <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="chart-income" checked onchange="renderOvChart()"> <span style="color:#6EE7B7">■</span> 收入</label>
@@ -286,7 +312,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 3. RSU 區塊 -->
-    <div class="section-card" style="margin-top:10px">
+    <div class="section-card" id="ov-rsu-section" style="margin-top:10px">
       <div class="section-title">
         <span>📦 孟青 RSU</span>
         <div style="display:flex;gap:6px">
@@ -329,7 +355,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 5. 固定支出 -->
-    <div class="section-card">
+    <div class="section-card" id="ov-fixed-section">
       <div class="section-title">
         <span>🏠 固定支出</span>
         <button class="btn btn-sm btn-ghost" onclick="addOvRow('fixed')">＋</button>
@@ -339,7 +365,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 6. 變動支出（分期/限期項目） -->
-    <div class="section-card">
+    <div class="section-card" id="ov-var-section">
       <div class="section-title">
         <span>🔁 變動支出</span>
         <button class="btn btn-sm btn-ghost" onclick="openVarExpModal()">＋</button>
@@ -350,7 +376,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 7. 信用卡帳單 -->
-    <div class="section-card">
+    <div class="section-card" id="ov-cc-section">
       <div class="section-title"><span>💳 信用卡帳單 (<span id="ov-month-label"></span>)</span></div>
       <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:0 2px;margin-bottom:6px;gap:4px">
         <span style="width:32px;flex-shrink:0">人</span>
@@ -361,16 +387,31 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <div id="ov-card-rows"></div>
       <div class="total-row" style="margin-top:8px"><span>總帳單</span><span class="neg" id="ov-total-bill">NT$ 0</span></div>
       <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>已繳</span><span class="pos" id="ov-total-paid">NT$ 0</span></div>
+      <div id="ov-interest-row" style="display:none;justify-content:space-between;padding:4px 0;font-size:13px"><span style="color:var(--orange)">💸 本月利息</span><span class="warn" id="ov-total-interest">NT$ 0</span></div>
       <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;font-weight:700"><span>未繳</span><span class="warn" id="ov-total-unpaid">NT$ 0</span></div>
+    </div>
+    <!-- 年度利息 -->
+    <div class="section-card" id="ov-annual-interest-box" style="display:none;border-color:var(--orange)">
+      <div class="section-title" style="color:var(--orange)"><span>💸 年度利息統計</span><span id="ov-annual-interest-year" style="font-size:11px;color:var(--muted)"></span></div>
+      <div id="ov-annual-interest-list"></div>
+      <div class="total-row"><span>全年利息合計</span><span style="color:var(--orange);font-family:var(--mono)" id="ov-annual-interest-total">NT$ 0</span></div>
     </div>
   </div>
 
   <!-- ══ 股票 ══ -->
   <div class="tab-content" id="tab-2" data-tab="2">
     <div class="filter-bar"><button class="btn-icon" onclick="openStockModal()">＋ 新增</button></div>
+    <!-- Quick Nav -->
+    <div class="quick-nav">
+      <button class="qnav-btn" onclick="document.getElementById('stock-pnl-section').scrollIntoView({behavior:'smooth'})">📉 已實現損益</button>
+      <button class="qnav-btn" onclick="document.getElementById('stock-summary-section').scrollIntoView({behavior:'smooth'})">📋 持股總覽</button>
+      <button class="qnav-btn" onclick="document.getElementById('stock-inventory-section').scrollIntoView({behavior:'smooth'})">📦 庫存</button>
+      <button class="qnav-btn" onclick="document.getElementById('div-section').scrollIntoView({behavior:'smooth'})">💰 配息</button>
+      <button class="qnav-btn" onclick="document.getElementById('stock-detail-section').scrollIntoView({behavior:'smooth'})">📑 買賣明細</button>
+    </div>
 
     <!-- 1. 已實現總損益（永遠顯示全部total，不受明細篩選影響） -->
-    <div style="background:#0e2d22;border:1px solid #1d5c3e;border-radius:12px;padding:12px 14px;margin-bottom:12px">
+    <div id="stock-pnl-section" style="background:#0e2d22;border:1px solid #1d5c3e;border-radius:12px;padding:12px 14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:10px;color:var(--muted)">賣出損益</span>
         <span style="font-family:var(--mono);font-size:13px;font-weight:700" id="realized-sell-pnl">NT$ 0</span>
@@ -386,6 +427,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 2. 總覽 -->
+    <div class="tab-section-header" id="stock-summary-section">📋 持股總覽</div>
     <div style="overflow-x:auto;margin-bottom:12px;border-radius:10px;border:1px solid var(--border)">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="background:var(--bg3)">
@@ -405,7 +447,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 3. 目前總庫存 -->
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden">
+    <div id="stock-inventory-section" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden">
       <div style="background:var(--bg3);padding:11px 14px;display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:13px;font-weight:700;color:var(--accent)">📦 目前總庫存</span>
         <div style="display:flex;align-items:center;gap:8px">
@@ -433,7 +475,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 5. 買入/賣出 明細（可篩選區間） -->
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px">
+    <div id="stock-detail-section" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px">
       <div style="font-size:13px;font-weight:700;color:var(--accent2);margin-bottom:10px">📋 買入 / 賣出 明細</div>
       <div class="view-tabs" id="stock-list-view-tabs" style="margin-bottom:10px">
         <div class="view-tab active" onclick="setStockListView('all',this)">全部</div>
@@ -457,9 +499,14 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <button class="btn-icon" onclick="openDebtModal()">＋ 新增記錄</button>
       <button class="btn-ghost" onclick="openPersonManager()">👤 管理人員</button>
     </div>
+    <div class="quick-nav">
+      <button class="qnav-btn" onclick="document.getElementById('debt-list').scrollIntoView({behavior:'smooth'})">📋 借貸記錄</button>
+      <button class="qnav-btn" onclick="document.getElementById('debt-summary-section').scrollIntoView({behavior:'smooth'})">📊 彙總</button>
+    </div>
+    <div class="tab-section-header">📋 借貸記錄（依人員）</div>
     <div id="debt-list"></div>
-    <div class="section-card" style="margin-top:8px">
-      <div class="section-title">📋 總結</div>
+    <div class="section-card" id="debt-summary-section" style="margin-top:8px">
+      <div class="section-title">📊 借貸彙總</div>
       <div id="debt-summary"></div>
     </div>
   </div>
@@ -470,19 +517,31 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <button class="btn-icon" onclick="openGoldModal('buy')">＋ 買入</button>
       <button class="btn-ghost" onclick="openGoldModal('sell')">賣出</button>
     </div>
+    <div class="quick-nav">
+      <button class="qnav-btn" onclick="document.getElementById('gold-price-section').scrollIntoView({behavior:'smooth'})">🥇 金價與統計</button>
+      <button class="qnav-btn" onclick="document.getElementById('gold-buy-section').scrollIntoView({behavior:'smooth'})">📈 買入記錄</button>
+      <button class="qnav-btn" onclick="document.getElementById('gold-sell-section').scrollIntoView({behavior:'smooth'})">📉 賣出記錄</button>
+    </div>
+    <div id="gold-price-section">
     <div class="gold-price-row">
       <span class="gold-price-label">🥇 目前一錢金價 (NT$)</span>
       <input class="gold-price-input" type="number" id="gold-price-input" placeholder="輸入金價" oninput="saveGoldPrice();renderGold()">
     </div>
     <div class="gold-stat-bar" id="gold-stats"></div>
-    <div class="section-divider">▸ 買入記錄</div>
+    </div>
+    <div class="tab-section-header" id="gold-buy-section" style="margin-top:8px">📈 買入記錄</div>
     <div class="expense-list" id="gold-buy-list"></div>
-    <div class="section-divider" style="margin-top:12px">▸ 賣出記錄</div>
+    <div class="tab-section-header" id="gold-sell-section" style="margin-top:12px">📉 賣出記錄</div>
     <div class="expense-list" id="gold-sell-list"></div>
   </div>
 
   <!-- ══ 定存 ══ -->
   <div class="tab-content" id="tab-5" data-tab="5">
+    <!-- Quick Nav -->
+    <div class="quick-nav">
+      <button class="qnav-btn" onclick="switchDepView('mine',document.querySelector('#dep-view-tabs .view-tab'));document.getElementById('dep-mine-view').scrollIntoView({behavior:'smooth'})">🏦 我的定存</button>
+      <button class="qnav-btn" onclick="switchDepView('market',document.querySelectorAll('#dep-view-tabs .view-tab')[1]);document.getElementById('dep-market-view').scrollIntoView({behavior:'smooth'})">📊 市場利率</button>
+    </div>
     <!-- 子頁籤 -->
     <div class="view-tabs" id="dep-view-tabs" style="margin-bottom:12px">
       <div class="view-tab active" onclick="switchDepView('mine',this)">我的定存</div>
@@ -621,6 +680,39 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 </div>
 
+<!-- ══ OCR Import Modal ══ -->
+<div class="modal-overlay" id="ocr-modal">
+  <div class="modal-box">
+    <div class="modal-header"><span>📷 截圖匯入消費</span><button class="close-btn" onclick="closeModal('ocr-modal')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">上傳信用卡帳單截圖，系統將嘗試自動辨識消費項目。辨識後可手動修改。</div>
+      <!-- Card select -->
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">歸屬信用卡</div>
+        <select id="ocr-card" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 11px;font-size:13px"></select>
+      </div>
+      <!-- Upload area -->
+      <label id="ocr-drop-area" style="display:block;border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;margin-bottom:10px;transition:border-color .2s" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleOcrDrop(event)">
+        <div style="font-size:24px;margin-bottom:6px">📸</div>
+        <div style="font-size:13px;color:var(--muted)">點擊或拖曳截圖至此</div>
+        <input type="file" id="ocr-file-input" accept="image/*" style="display:none" onchange="handleOcrFile(this.files[0])">
+      </label>
+      <canvas id="ocr-canvas" style="display:none;max-width:100%;border-radius:8px;margin-bottom:10px"></canvas>
+      <!-- OCR status -->
+      <div id="ocr-status" style="font-size:12px;color:var(--muted);margin-bottom:8px;display:none"></div>
+      <!-- Parsed results -->
+      <div id="ocr-results" style="display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:8px">📋 辨識結果（可逐筆編輯後匯入）</div>
+        <div id="ocr-result-list"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-secondary" style="flex:1" onclick="closeModal('ocr-modal')">取消</button>
+          <button class="btn btn-primary" style="flex:1" onclick="importOcrItems()">✅ 匯入選取項目</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ Expense Modal ══ -->
 <div class="modal-overlay" id="expense-modal">
   <div class="modal-box">
@@ -635,11 +727,26 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
         <select id="exp-cat"><option>餐飲</option><option>交通</option><option>購物</option><option>娛樂</option><option>旅遊</option><option>醫療</option><option>超市</option><option>加油</option><option selected>其他</option></select>
         <label>分期</label><label class="toggle-row"><input type="checkbox" id="exp-inst" onchange="toggleInst()"> 啟用分期</label>
         <label id="lbl-amt">金額</label><input type="number" id="exp-amount" placeholder="0">
-        <label id="lbl-inst-n" style="display:none">期數</label>
-        <select id="exp-inst-count" style="display:none" onchange="buildInstFields()">
-          <option>2</option><option>3</option><option>4</option><option>6</option><option>8</option><option>9</option><option>10</option><option>12</option><option>18</option><option>24</option><option>30</option><option>36</option>
-        </select>
-        <label id="lbl-inst-f" style="display:none">每期</label><div id="exp-inst-fields" class="inst-grid" style="display:none"></div>
+        <!-- Installment full-width block -->
+        <div id="inst-section" style="display:none;grid-column:1/-1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:2px">
+          <div style="font-size:11px;color:var(--accent2);font-weight:700;margin-bottom:10px">📅 分期設定</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <div style="flex:1">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:4px">消費總金額</div>
+              <input type="number" id="exp-inst-total" placeholder="例：5000" oninput="autoCalcInst()"
+                style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:13px">
+            </div>
+            <div style="flex:1">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:4px">期數</div>
+              <select id="exp-inst-count" onchange="buildInstFields()"
+                style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:13px">
+                <option>2</option><option>3</option><option>4</option><option>6</option><option>8</option><option>9</option><option>10</option><option>12</option><option>18</option><option>24</option><option>30</option><option>36</option>
+              </select>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">各期金額（可手動調整）</div>
+          <div id="exp-inst-fields" class="inst-grid"></div>
+        </div>
         <label>備註</label><textarea id="exp-note" placeholder="選填備註"></textarea>
         <div class="form-actions"><button class="btn btn-secondary" onclick="closeModal('expense-modal')">取消</button><button class="btn btn-primary" onclick="saveExpense()">儲存</button></div>
       </div>
@@ -658,6 +765,22 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
         <button class="btn btn-danger" onclick="setupDefaultCards()">🔄 重設預設卡片</button>
       </div>
       <div class="form-actions"><button class="btn btn-primary" onclick="saveBankManager()">儲存</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Card Pay Modal ══ -->
+<div class="modal-overlay" id="card-pay-modal">
+  <div class="modal-box">
+    <div class="modal-header"><span id="cpay-title">繳款紀錄</span><button class="close-btn" onclick="closeModal('card-pay-modal')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">帳單金額：<span id="cpay-bill" style="color:var(--red);font-weight:700"></span></div>
+      <input type="hidden" id="cpay-cid"><input type="hidden" id="cpay-mo">
+      <div class="form-grid">
+        <label>已繳金額</label><input type="number" id="cpay-paid" placeholder="0">
+        <label style="color:var(--orange)">💸 利息</label><input type="number" id="cpay-interest" placeholder="0（若有循環利息請填入）" style="border-color:var(--orange)">
+        <div class="form-actions"><button class="btn btn-secondary" onclick="closeModal('card-pay-modal')">取消</button><button class="btn btn-primary" onclick="saveCardPay()">儲存</button></div>
+      </div>
     </div>
   </div>
 </div>
@@ -957,6 +1080,7 @@ function runMigrate(){
     if(!D.ovRows.income)D.ovRows.income=[];
     if(!D.ovRows.fixed)D.ovRows.fixed=[];
     if(!D.ovRows.variable)D.ovRows.variable=[];
+    if(!D.cardInterest)D.cardInterest={};
     const toRemove=['i3','i4'];
     const hasData=(row)=>Object.values(row.amounts||{}).some(v=>Number(v)>0);
     D.ovRows.income=D.ovRows.income.filter(r=>!(toRemove.includes(r.id)&&!hasData(r)));
@@ -1066,9 +1190,10 @@ function renderCC(){
     let cardRowsHTML=b.cards.map(c=>{
       const bill=getCardBill(c.id,mo);
       const carry=getCarryForward(c.id,mo);
+      const interest=getCardInterest(c.id,mo);
       const paid=getPaid(c.id,mo);
-      const unpaid=bill+carry-paid;
-      bankBill+=bill+carry;
+      const unpaid=bill+carry+interest-paid;
+      bankBill+=bill+carry+interest;
       const billConf=isBillConfirmed(c.id,mo);
       const paidConf=isPaidConfirmed(c.id,mo);
       // 該卡本月消費明細
@@ -1078,8 +1203,13 @@ function renderCC(){
               <span class="card-exp-name" style="color:var(--yellow)">${prevMonth(mo)} 未繳結轉</span>
               <span class="card-exp-amt" style="color:var(--yellow)">+$${fmt(carry)}</span>
             </div>`:'';
-      const cardExpHTML=(carry>0||cardExps.length)
-        ?(carryHtml+(cardExps.length?cardExps.map(e=>{
+      const interestHtml=interest>0?`<div class="card-exp-item" style="background:#2d1a17;border-left:2px solid var(--orange)">
+              <span class="card-exp-date" style="color:var(--orange)">利息</span>
+              <span class="card-exp-name" style="color:var(--orange)">循環利息</span>
+              <span class="card-exp-amt" style="color:var(--orange)">+$${fmt(interest)}</span>
+            </div>`:'';
+      const cardExpHTML=(carry>0||interest>0||cardExps.length)
+        ?(carryHtml+interestHtml+(cardExps.length?cardExps.map(e=>{
             const total=e.isInstallment?e.installments.reduce((s,i)=>s+Number(i.amount||0),0):Number(e.amount||0);
             return`<div class="card-exp-item">
               <span class="card-exp-date">${e.date}</span>
@@ -1099,6 +1229,7 @@ function renderCC(){
           </div>
           <div class="card-amounts">
             <span class="card-bill-val ${billConf?'confirmed':''}" title="點擊切換確認" onclick="toggleBillConfirm('${c.id}','${mo}')">帳$${fmt(bill)}</span>
+            ${interest>0?`<span class="slash">/</span><span style="font-size:10px;color:var(--orange)">息$${fmt(interest)}</span>`:''}
             <span class="slash">/</span>
             <span class="card-paid-val ${paidConf?'confirmed':''}" title="點擊切換已繳確認" onclick="togglePaidConfirm('${c.id}','${mo}',event)">繳$${fmt(paid)}</span>
             ${unpaid>0?`<span class="slash">/</span><span class="card-unpaid-val">欠$${fmt(unpaid)}</span>`:''}
@@ -1177,17 +1308,158 @@ function togglePaidConfirm(cid,mo,ev){
   save();renderCC();
 }
 
-// Card pay modal (inline edit paid amount)
+// Card pay modal (inline edit paid amount + interest)
+function getCardInterest(cid,mo){return Number((D.cardInterest||{})[cid+'_'+mo]||0);}
 function openCardPayModal(cid,mo){
   const card=findCard(cid);
   const bill=getCardBill(cid,mo);
+  const carry=getCarryForward(cid,mo);
   const paid=getPaid(cid,mo);
+  const interest=getCardInterest(cid,mo);
+  document.getElementById('cpay-title').textContent=`${card?.owner?card.owner+' · ':''}${card?.name||''}${card?.last4?' ('+card.last4+')':''}`;
+  document.getElementById('cpay-bill').textContent=`NT$ ${fmt(bill)}${carry>0?` (+結轉 ${fmt(carry)})':''}`;
+  document.getElementById('cpay-cid').value=cid;
+  document.getElementById('cpay-mo').value=mo;
+  document.getElementById('cpay-paid').value=paid||'';
+  document.getElementById('cpay-interest').value=interest||'';
+  document.getElementById('card-pay-modal').classList.add('open');
+}
+function saveCardPay(){
+  const cid=document.getElementById('cpay-cid').value;
+  const mo=document.getElementById('cpay-mo').value;
+  const paid=Number(document.getElementById('cpay-paid').value)||0;
+  const interest=Number(document.getElementById('cpay-interest').value)||0;
+  if(!D.payments)D.payments={};
+  if(!D.cardInterest)D.cardInterest={};
   const paidConf=isPaidConfirmed(cid,mo);
-  const val=prompt(`${card?.name||''} (末四碼${card?.last4})\n帳單金額: NT$ ${fmt(bill)}\n\n請輸入「已繳金額」(目前: ${paid}):`);
-  if(val===null)return;
   if(!D.payments[cid+'_'+mo])D.payments[cid+'_'+mo]={amount:0,confirmed:paidConf};
-  D.payments[cid+'_'+mo].amount=Number(val)||0;
-  save();renderCC();
+  D.payments[cid+'_'+mo].amount=paid;
+  D.cardInterest[cid+'_'+mo]=interest;
+  save();closeModal('card-pay-modal');renderCC();
+}
+
+// ═══════════════════════════════════════════════
+//  OCR IMPORT
+// ═══════════════════════════════════════════════
+let ocrItems=[];
+function openOcrModal(){
+  const sel=document.getElementById('ocr-card');
+  sel.innerHTML='';
+  D.banks.forEach(b=>b.cards.forEach(c=>{
+    const owner=c.owner?`[${c.owner}] `:'';
+    sel.innerHTML+=`<option value="${c.id}">${owner}${b.name} — ${c.name}${c.last4?' ('+c.last4+')':''}</option>`;
+  }));
+  document.getElementById('ocr-canvas').style.display='none';
+  document.getElementById('ocr-status').style.display='none';
+  document.getElementById('ocr-results').style.display='none';
+  document.getElementById('ocr-file-input').value='';
+  ocrItems=[];
+  document.getElementById('ocr-modal').classList.add('open');
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const dropArea=document.getElementById('ocr-drop-area');
+  if(dropArea)dropArea.addEventListener('click',()=>document.getElementById('ocr-file-input').click());
+});
+function handleOcrDrop(e){
+  e.preventDefault();
+  document.getElementById('ocr-drop-area').style.borderColor='var(--border)';
+  const file=e.dataTransfer.files[0];
+  if(file&&file.type.startsWith('image/'))handleOcrFile(file);
+}
+function handleOcrFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const canvas=document.getElementById('ocr-canvas');
+    const img=new Image();
+    img.onload=()=>{
+      canvas.width=img.width;canvas.height=img.height;
+      canvas.getContext('2d').drawImage(img,0,0);
+      canvas.style.display='block';
+      runOcr(canvas);
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+async function runOcr(canvas){
+  const statusEl=document.getElementById('ocr-status');
+  statusEl.style.display='block';
+  statusEl.textContent='🔍 辨識中，請稍候...';
+  statusEl.style.color='var(--accent2)';
+  try{
+    if(typeof Tesseract==='undefined'){statusEl.textContent='⚠️ OCR 套件載入中，請重試...';statusEl.style.color='var(--orange)';return;}
+    const {data:{text}}=await Tesseract.recognize(canvas,'chi_tra+eng',{logger:m=>{if(m.status==='recognizing text')statusEl.textContent=`🔍 辨識中 ${Math.round(m.progress*100)}%...`;}});
+    statusEl.textContent='✅ 辨識完成，正在分析...';
+    parseOcrText(text);
+  }catch(e){
+    statusEl.textContent='❌ 辨識失敗：'+e.message;
+    statusEl.style.color='var(--red)';
+  }
+}
+function parseOcrText(text){
+  // Parse patterns for Taiwan bank statements
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>2);
+  const dateRe=/(\d{4}[\/-]\d{1,2}[\/-]\d{1,2}|\d{2}[\/-]\d{2})/;
+  const amtRe=/NT\$?\s*([\d,]+)|(\d{1,3}(?:,\d{3})+)|\b(\d{3,6})\b/;
+  const items=[];
+  lines.forEach(line=>{
+    const dateM=line.match(dateRe);
+    const amtM=line.match(amtRe);
+    if(amtM){
+      const rawAmt=(amtM[1]||amtM[2]||amtM[3]||'').replace(/,/g,'');
+      const amt=Number(rawAmt);
+      if(amt>0&&amt<1000000){
+        let name=line.replace(dateRe,'').replace(amtRe,'').replace(/[NT\$]/g,'').replace(/\s+/g,' ').trim().slice(0,30);
+        if(!name)name='消費';
+        let date='';
+        if(dateM){
+          const raw=dateM[1];
+          const parts=raw.replace(/\//g,'-').split('-');
+          if(parts.length===3)date=parts.map((p,i)=>p.padStart(i===0?4:2,'0')).join('-');
+          else if(parts.length===2){const now=new Date();date=`${now.getFullYear()}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;}
+        }
+        if(!date)date=new Date().toISOString().slice(0,10);
+        items.push({name,amount:amt,date,selected:true});
+      }
+    }
+  });
+  ocrItems=items;
+  renderOcrResults();
+}
+function renderOcrResults(){
+  const statusEl=document.getElementById('ocr-status');
+  const resultsEl=document.getElementById('ocr-results');
+  if(!ocrItems.length){statusEl.textContent='⚠️ 未偵測到消費項目，請手動輸入或嘗試更清晰的截圖。';statusEl.style.color='var(--orange)';return;}
+  statusEl.textContent=`✅ 偵測到 ${ocrItems.length} 筆消費`;statusEl.style.color='var(--accent)';
+  resultsEl.style.display='block';
+  const list=document.getElementById('ocr-result-list');
+  list.innerHTML=ocrItems.map((item,i)=>`
+    <div style="background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;gap:6px;align-items:center">
+      <input type="checkbox" id="ocr-chk-${i}" ${item.selected?'checked':''} onchange="ocrItems[${i}].selected=this.checked" style="width:16px;height:16px;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <input type="text" value="${item.name}" oninput="ocrItems[${i}].name=this.value"
+          style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;margin-bottom:4px">
+        <div style="display:flex;gap:4px">
+          <input type="date" value="${item.date}" oninput="ocrItems[${i}].date=this.value"
+            style="flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 6px;font-size:11px">
+          <input type="number" value="${item.amount}" oninput="ocrItems[${i}].amount=Number(this.value)"
+            style="width:90px;background:var(--bg2);border:1px solid var(--border);color:var(--accent);border-radius:6px;padding:4px 8px;font-size:12px;text-align:right;font-family:var(--mono)">
+        </div>
+      </div>
+    </div>`).join('');
+}
+function importOcrItems(){
+  const cardId=document.getElementById('ocr-card').value;
+  if(!cardId){alert('請選擇信用卡');return;}
+  const mo=document.getElementById('filter-month').value;
+  const selected=ocrItems.filter(i=>i.selected&&i.amount>0&&i.name);
+  if(!selected.length){alert('請勾選至少一筆');return;}
+  selected.forEach(item=>{
+    D.expenses.push({id:uid(),cardId,date:item.date,billingMonth:mo,name:item.name,category:'其他',note:'（OCR匯入）',isInstallment:false,amount:String(item.amount),installments:[]});
+  });
+  save();closeModal('ocr-modal');renderCC();
+  alert(`✅ 已匯入 ${selected.length} 筆消費`);
 }
 
 // ═══════════════════════════════════════════════
@@ -1197,7 +1469,8 @@ function rebuildExpCardSelect(){
   const sel=document.getElementById('exp-card');
   sel.innerHTML='';
   D.banks.forEach(b=>b.cards.forEach(c=>{
-    sel.innerHTML+=`<option value="${c.id}">${b.name} — ${c.name} (${c.last4})</option>`;
+    const owner=c.owner?`[${c.owner}] `:'';
+    sel.innerHTML+=`<option value="${c.id}">${owner}${b.name} — ${c.name}${c.last4?' ('+c.last4+')':''}</option>`;
   }));
 }
 function openExpenseModal(id){
@@ -1215,12 +1488,15 @@ function openExpenseModal(id){
     document.getElementById('exp-note').value=e.note||'';
     document.getElementById('exp-inst').checked=e.isInstallment;
     toggleInst();
-    if(e.isInstallment){document.getElementById('exp-inst-count').value=e.installments.length;buildInstFields(e.installments);}
-    else document.getElementById('exp-amount').value=e.amount||'';
+    if(e.isInstallment){
+      document.getElementById('exp-inst-count').value=e.installments.length;
+      document.getElementById('exp-inst-total').value=e.installments.reduce((s,i)=>s+Number(i.amount||0),0)||'';
+      buildInstFields(e.installments);
+    } else document.getElementById('exp-amount').value=e.amount||'';
   } else {
     document.getElementById('exp-date').value=new Date().toISOString().slice(0,10);
     document.getElementById('exp-billing-month').value=currentMo;
-    ['exp-name','exp-note','exp-amount'].forEach(k=>document.getElementById(k).value='');
+    ['exp-name','exp-note','exp-amount','exp-inst-total'].forEach(k=>document.getElementById(k).value='');
     document.getElementById('exp-inst').checked=false;toggleInst();
   }
   document.getElementById('expense-modal').classList.add('open');
@@ -1231,12 +1507,28 @@ function toggleInst(){
   const on=document.getElementById('exp-inst').checked;
   document.getElementById('lbl-amt').textContent=on?'　':'金額';
   document.getElementById('exp-amount').style.display=on?'none':'block';
-  ['lbl-inst-n','exp-inst-count','lbl-inst-f','exp-inst-fields'].forEach(k=>document.getElementById(k).style.display=on?'block':'none');
+  document.getElementById('inst-section').style.display=on?'block':'none';
   if(on)buildInstFields();
+}
+function autoCalcInst(){
+  const total=Number(document.getElementById('exp-inst-total').value)||0;
+  if(!total)return;
+  buildInstFields();
 }
 function buildInstFields(existing){
   const n=Number(document.getElementById('exp-inst-count').value)||3;
-  document.getElementById('exp-inst-fields').innerHTML=Array.from({length:n},(_,i)=>`<div class="inst-row"><span>第${i+1}期</span><input type="number" class="inst-amt" placeholder="0" value="${existing?existing[i]?.amount||'':''}"></div>`).join('');
+  const total=Number(document.getElementById('exp-inst-total')?.value)||0;
+  const base=total?Math.floor(total/n):0;
+  const rem=total?total-base*n:0;
+  document.getElementById('exp-inst-fields').innerHTML=Array.from({length:n},(_,i)=>{
+    const autoAmt=total?(i===0?base+rem:base):0;
+    const val=existing?existing[i]?.amount||'':(autoAmt||'');
+    return`<div class="inst-row">
+      <span style="font-size:11px;color:var(--muted);min-width:38px;flex-shrink:0">第${i+1}期</span>
+      <input type="number" class="inst-amt" placeholder="0" value="${val}"
+        style="flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-size:13px">
+    </div>`;
+  }).join('');
 }
 function saveExpense(){
   const name=document.getElementById('exp-name').value.trim();
@@ -1494,6 +1786,32 @@ function delVarExp(id){
   save();renderOverview();
 }
 
+function renderAnnualInterest(mo){
+  if(!D.cardInterest)return;
+  const year=mo.slice(0,4);
+  const months=Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,'0')}`);
+  const cards=allCards();
+  let rows=[],yearTotal=0;
+  cards.forEach(c=>{
+    let cardTotal=0;
+    months.forEach(m=>{cardTotal+=getCardInterest(c.id,m);});
+    if(cardTotal>0){
+      yearTotal+=cardTotal;
+      rows.push(`<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #1a2d3f">
+        <span style="color:${c.color}">${c.owner?c.owner+' · ':''}${c.name}${c.last4?' ('+c.last4+')':''}</span>
+        <span style="font-family:var(--mono);color:var(--orange)">$${fmt(cardTotal)}</span>
+      </div>`);
+    }
+  });
+  const box=document.getElementById('ov-annual-interest-box');
+  if(!box)return;
+  box.style.display=yearTotal>0?'block':'none';
+  if(yearTotal>0){
+    document.getElementById('ov-annual-interest-year').textContent=`${year}年`;
+    document.getElementById('ov-annual-interest-list').innerHTML=rows.join('');
+    document.getElementById('ov-annual-interest-total').textContent=`NT$ ${fmt(yearTotal)}`;
+  }
+}
 function recalcOverview(mo){
   if(!D.ovRows.variable)D.ovRows.variable=[];
   const incomeTotal=D.ovRows.income.filter(r=>isRowActiveInMonth(r,mo)&&!(r.noMonth&&r.noMonth[mo])).reduce((s,r)=>s+Number(r.amounts&&r.amounts[mo]||0),0);
@@ -1503,12 +1821,13 @@ function recalcOverview(mo){
   document.getElementById('ov-total-fixed').textContent=`NT$ ${fmt(fixedTotal)}`;
   document.getElementById('ov-total-var').textContent=`NT$ ${fmt(varTotal)}`;
 
-  let totalBill=0,totalPaid=0;
+  let totalBill=0,totalPaid=0,totalInterest=0;
   const cardRows=allCards().map(c=>{
     const bill=getCardBill(c.id,mo);
+    const interest=getCardInterest(c.id,mo);
     const paid=getPaid(c.id,mo);
-    const unpaid=bill-paid;
-    totalBill+=bill;totalPaid+=paid;
+    const unpaid=bill+interest-paid;
+    totalBill+=bill+interest;totalPaid+=paid;totalInterest+=interest;
     const billConf=isBillConfirmed(c.id,mo);
     const paidConf=isPaidConfirmed(c.id,mo);
     return`<div style="display:flex;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px solid #1a2d3f;gap:4px">
@@ -1527,6 +1846,10 @@ function recalcOverview(mo){
   document.getElementById('ov-total-bill').textContent=`NT$ ${fmt(totalBill)}`;
   document.getElementById('ov-total-paid').textContent=`NT$ ${fmt(totalPaid)}`;
   document.getElementById('ov-total-unpaid').textContent=`NT$ ${fmt(totalUnpaid)}`;
+  const intRow=document.getElementById('ov-interest-row');
+  if(intRow){intRow.style.display=totalInterest>0?'flex':'none';document.getElementById('ov-total-interest').textContent=`NT$ ${fmt(totalInterest)}`;}
+  // Annual interest
+  renderAnnualInterest(mo);
 
   const balance=incomeTotal-fixedTotal-varTotal-totalBill;
   const bc=document.getElementById('balance-card');
@@ -2673,9 +2996,10 @@ document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click
 // ── Expose all functions to window for onclick handlers ──
 Object.assign(window,{
   switchTab,setCCView,openExpenseModal,editExpense,delExpense,
-  toggleInst,buildInstFields,saveExpense,
+  toggleInst,buildInstFields,saveExpense,autoCalcInst,
+  openOcrModal,handleOcrDrop,handleOcrFile,importOcrItems,
   openBankManager,renderBankManager,addBankInManager,saveBankManager,setupDefaultCards,
-  getExpBillingMonth,handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,
+  getExpBillingMonth,handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,saveCardPay,getCardInterest,renderAnnualInterest,
   openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,calcStockTotal,calcTradeAmt,calcDivIncome,renderDividends,setStockListView,
   openSymbolManager,renderSymbolManager,addSymbolInManager,deleteSymbol,moveSymbol,onTickerInput,onNameInput,
   addOvRow,renderOverview,setOvAmt,toggleOvConf,toggleNoMonth,delOvRow,recalcOverview,renderOvChart,
