@@ -699,10 +699,16 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     <div class="modal-header"><span>📷 截圖匯入消費</span><button class="close-btn" onclick="closeModal('ocr-modal')">✕</button></div>
     <div class="modal-body">
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">上傳信用卡帳單截圖，系統將嘗試自動辨識消費項目。辨識後可手動修改。</div>
-      <!-- Card select -->
-      <div style="margin-bottom:10px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">歸屬信用卡</div>
-        <select id="ocr-card" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 11px;font-size:13px"></select>
+      <!-- Card + billing month -->
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px;align-items:end">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">歸屬信用卡</div>
+          <select id="ocr-card" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 11px;font-size:13px"></select>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">帳單月份</div>
+          <input type="month" id="ocr-billing-month" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 8px;font-size:13px">
+        </div>
       </div>
       <!-- Upload area -->
       <label id="ocr-drop-area" style="display:block;border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;margin-bottom:10px;transition:border-color .2s" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleOcrDrop(event)">
@@ -1439,6 +1445,8 @@ function openOcrModal(){
     const owner=c.owner?`[${c.owner}] `:'';
     sel.innerHTML+=`<option value="${c.id}">${owner}${b.name} — ${c.name}${c.last4?' ('+c.last4+')':''}</option>`;
   }));
+  // Default billing month to current CC filter month
+  document.getElementById('ocr-billing-month').value=document.getElementById('filter-month').value||new Date().toISOString().slice(0,7);
   document.getElementById('ocr-canvas').style.display='none';
   document.getElementById('ocr-status').style.display='none';
   document.getElementById('ocr-results').style.display='none';
@@ -1488,32 +1496,60 @@ async function runOcr(canvas){
   }
 }
 function parseOcrText(text){
-  // Parse patterns for Taiwan bank statements
-  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>2);
-  const dateRe=/(\d{4}[\/-]\d{1,2}[\/-]\d{1,2}|\d{2}[\/-]\d{2})/;
-  const amtRe=/NT\$?\s*([\d,]+)|(\d{1,3}(?:,\d{3})+)|\b(\d{3,6})\b/;
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>3);
+
+  // Keywords that indicate non-transaction lines (headers, summaries, payments)
+  const SKIP=[
+    '以下為','新增消費小計','應付帳款','總費用','年百分率',
+    '消費日','入帳起息日','帳單月份','幣別金額','外幣折算',
+    'ATM','網路繳款','本行帳戶繳款','銀行轉帳','自動繳費','帳戶繳款',
+    '合計','小計','總計','結欠','前期','未繳款項',
+    '您本期','頁次','頁共','第 頁','信用額度','可用額度',
+    '分期未到期','利率','年費','手續費總計'
+  ];
+
+  // A valid transaction line MUST start with YYYY/MM/DD
+  const START_DATE=/^(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/;
+  // The transaction amount is the LAST number at end of line (may have commas, may be negative)
+  const END_AMT=/\s(-?[\d,]+)\s*$/;
+
   const items=[];
+
   lines.forEach(line=>{
-    const dateM=line.match(dateRe);
-    const amtM=line.match(amtRe);
-    if(amtM){
-      const rawAmt=(amtM[1]||amtM[2]||amtM[3]||'').replace(/,/g,'');
-      const amt=Number(rawAmt);
-      if(amt>0&&amt<1000000){
-        let name=line.replace(dateRe,'').replace(amtRe,'').replace(/[NT\$]/g,'').replace(/\s+/g,' ').trim().slice(0,30);
-        if(!name)name='消費';
-        let date='';
-        if(dateM){
-          const raw=dateM[1];
-          const parts=raw.replace(/\//g,'-').split('-');
-          if(parts.length===3)date=parts.map((p,i)=>p.padStart(i===0?4:2,'0')).join('-');
-          else if(parts.length===2){const now=new Date();date=`${now.getFullYear()}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;}
-        }
-        if(!date)date=new Date().toISOString().slice(0,10);
-        items.push({name,amount:amt,date,selected:true});
-      }
-    }
+    // Skip header/summary/payment lines
+    if(SKIP.some(k=>line.includes(k)))return;
+
+    // Must begin with a date
+    const dateM=line.match(START_DATE);
+    if(!dateM)return;
+
+    // Must end with a number (the amount)
+    const amtM=line.match(END_AMT);
+    if(!amtM)return;
+
+    const rawAmt=amtM[1].replace(/,/g,'');
+    const amt=Number(rawAmt);
+    // Skip negative (payments/refunds) and unreasonable amounts
+    if(amt<=0||amt>500000)return;
+
+    // Parse the transaction date (first date on line = 消費日)
+    const parts=dateM[1].replace(/\//g,'-').split('-');
+    if(parts.length!==3)return;
+    const date=parts.map((p,i)=>p.padStart(i===0?4:2,'0')).join('-');
+
+    // Build name: strip leading date(s) and trailing amount
+    let name=line.replace(END_AMT,'').trim();
+    // Remove first date (消費日)
+    name=name.replace(/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\s*/,'');
+    // Remove second date if present (入帳起息日)
+    name=name.replace(/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\s*/,'');
+    name=name.replace(/\s+/g,' ').trim().slice(0,40);
+
+    if(!name||name.length<1)name='消費';
+
+    items.push({name,amount:amt,date,selected:true});
   });
+
   ocrItems=items;
   renderOcrResults();
 }
@@ -1542,12 +1578,15 @@ function renderOcrResults(){
 function importOcrItems(){
   const cardId=document.getElementById('ocr-card').value;
   if(!cardId){alert('請選擇信用卡');return;}
-  const mo=document.getElementById('filter-month').value;
+  const mo=document.getElementById('ocr-billing-month').value||document.getElementById('filter-month').value;
   const selected=ocrItems.filter(i=>i.selected&&i.amount>0&&i.name);
   if(!selected.length){alert('請勾選至少一筆');return;}
   selected.forEach(item=>{
     D.expenses.push({id:uid(),cardId,date:item.date,billingMonth:mo,name:item.name,category:'其他',note:'（OCR匯入）',isInstallment:false,amount:String(item.amount),installments:[]});
   });
+  // Update CC filter to show the imported month
+  document.getElementById('filter-month').value=mo;
+  try{localStorage.setItem('lastCCMonth',mo);}catch(e){}
   save();closeModal('ocr-modal');renderCC();
   alert(`✅ 已匯入 ${selected.length} 筆消費`);
 }
