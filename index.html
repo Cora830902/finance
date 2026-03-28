@@ -757,6 +757,11 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <div id="ocr-results" style="display:none">
         <div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:8px">📋 辨識結果（可逐筆編輯後匯入）</div>
         <div id="ocr-result-list"></div>
+        <!-- Raw OCR debug (collapsible) -->
+        <details style="margin-top:8px">
+          <summary style="font-size:10px;color:var(--muted);cursor:pointer;user-select:none">🔍 查看原始 OCR 文字（除錯用）</summary>
+          <pre id="ocr-raw-text" style="font-size:10px;color:var(--muted);background:var(--bg2);border-radius:6px;padding:8px;margin-top:4px;max-height:150px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"></pre>
+        </details>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button class="btn btn-secondary" style="flex:1" onclick="closeModal('ocr-modal')">取消</button>
           <button class="btn btn-primary" style="flex:1" onclick="importOcrItems()">✅ 匯入選取項目</button>
@@ -1261,7 +1266,8 @@ function getCarryForward(cid,mo,depth){
   const prevBill=getCardBill(cid,prev);
   const prevPaid=getPaid(cid,prev);
   const prevCarry=getCarryForward(cid,prev,(depth||0)+1);
-  return Math.max(0,prevBill+prevCarry-prevPaid);
+  const prevInterest=getCardInterest(cid,prev);
+  return Math.max(0,prevBill+prevCarry+prevInterest-prevPaid);
 }
 function getPaid(cid,mo){return Number((D.payments[cid+'_'+mo]||{}).amount||0)}
 function isPaidConfirmed(cid,mo){return !!(D.payments[cid+'_'+mo]||{}).confirmed}
@@ -1336,8 +1342,7 @@ function renderCC(){
             <div class="card-last4"><span style="color:var(--accent2)">${c.owner||''}</span>${c.owner?' · ':''}<span style="color:var(--muted)">${b.name}</span>${c.last4?' · '+c.last4:''}</div>
           </div>
           <div class="card-amounts">
-            <span class="card-bill-val ${billConf?'confirmed':''}" title="點擊切換確認" onclick="toggleBillConfirm('${c.id}','${mo}')">帳$${fmt(bill)}</span>
-            ${interest>0?`<span class="slash">/</span><span style="font-size:10px;color:var(--orange)">息$${fmt(interest)}</span>`:''}
+            <span class="card-bill-val ${billConf?'confirmed':''}" title="點擊切換確認（含結轉+利息）" onclick="toggleBillConfirm('${c.id}','${mo}')">帳$${fmt(bill+carry+interest)}</span>
             <span class="slash">/</span>
             <span class="card-paid-val ${paidConf?'confirmed':''}" title="點擊切換已繳確認" onclick="togglePaidConfirm('${c.id}','${mo}',event)">繳$${fmt(paid)}</span>
             ${unpaid>0?`<span class="slash">/</span><span class="card-unpaid-val">欠$${fmt(unpaid)}</span>`:''}
@@ -1595,10 +1600,27 @@ async function runOcr(canvas){
   }
 }
 function parseOcrText(text){
-  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  // ── 顯示原始 OCR 文字供除錯 ──
+  const dbgEl=document.getElementById('ocr-raw-text');
+  if(dbgEl)dbgEl.textContent=text;
 
-  // ══ Format A：表格式（PDF帳單、紙本帳單）══
-  // 每行：YYYY/MM/DD YYYY/MM/DD 消費名稱 金額
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  const billingMo=document.getElementById('ocr-billing-month')?.value||new Date().toISOString().slice(0,7);
+  const bYear=parseInt(billingMo.slice(0,4));
+  const bMonth=parseInt(billingMo.slice(5,7));
+
+  // 從任意行抓 NT$ 金額（支援 NT$、NTS、NT $、NT＄ 等 OCR 誤讀）
+  function extractNTAmounts(line){
+    return [...line.matchAll(/N[T丁][S\$＄]\s*([\d,]+)/gi)].map(m=>Number(m[1].replace(/,/g,'')));
+  }
+  // 推算年份（跨年帳單：月份比帳單月大很多代表上一年）
+  function inferDate(mStr,dStr){
+    const m=parseInt(mStr),d=parseInt(dStr);
+    const yr=(m>bMonth+3)?bYear-1:bYear;
+    return `${yr}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  }
+
+  // ══ Format A：表格式（PDF 帳單）每行以 YYYY/MM/DD 開頭 ══
   const FA_SKIP=['以下為','新增消費小計','應付帳款','總費用','年百分率','消費日','入帳起息日','帳單月份','幣別金額','外幣折算','ATM','網路繳款','本行帳戶繳款','銀行轉帳','自動繳費','帳戶繳款','合計','小計','總計','結欠','前期','未繳款項','您本期','頁次','頁共','信用額度','可用額度','分期未到期','利率'];
   const FA_START=/^(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/;
   const FA_END=/\s(-?[\d,]+)\s*$/;
@@ -1619,67 +1641,57 @@ function parseOcrText(text){
   });
   if(faItems.length>0){ocrItems=faItems;renderOcrResults();return;}
 
-  // ══ Format B：手機 App 截圖（多行格式）══
-  // 每筆交易拆成多行：
-  //   [商家名稱]
-  //   消費日 MM/DD · 入帳日 MM/DD
-  //   (可能有折抵行)
-  //   NT$ X,XXX   (或 NT$ X,XXX NT$ X,XXX 折後)
-  const billingMo=document.getElementById('ocr-billing-month')?.value||new Date().toISOString().slice(0,7);
-  const bYear=parseInt(billingMo.slice(0,4));
-  const bMonth=parseInt(billingMo.slice(5,7));
-  const FB_NAME_SKIP=['本期帳單','未出帳單','e帳單','已折抵','入帳日','消費日','分期付款','手續費','帳單日','信用額度','可用','合計','小計','總計','前期','結餘','ATM','繳費','繳款'];
-
-  function inferDate(mStr,dStr){
-    const m=parseInt(mStr),d=parseInt(dStr);
-    // 若月份明顯晚於帳單月份，推測是上一年
-    const yr=(m>bMonth+3)?bYear-1:bYear;
-    return `${yr}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-  }
+  // ══ Format B：手機 App 截圖 ══
+  // 策略：以「消費日 MM/DD」為錨點
+  //   往上找商家名稱（錨點上方 1~4 行）
+  //   往下找 NT$ 金額（錨點下方 0~5 行，或同行）
+  const FB_NAME_SKIP=['本期帳單','未出帳單','e帳單','已折抵','入帳日','消費日','分期付款','帳單日','信用額度','可用','合計','小計','總計','前期','結餘','ATM','繳費','繳款','信用卡'];
 
   const fbItems=[];
   const seen=new Set();
 
   for(let i=0;i<lines.length;i++){
     const line=lines[i];
-    // 必須含有 NT$
-    if(!line.includes('NT$'))continue;
-    // 取所有 NT$ 後的金額，取最後一個（折扣後）
-    const amts=[...line.matchAll(/NT\$\s*([\d,]+)/g)].map(m=>Number(m[1].replace(/,/g,'')));
-    if(!amts.length)continue;
-    const amt=amts[amts.length-1];
-    if(amt<=0||amt>500000)continue;
+    // 找「消費日 MM/DD」
+    const dm=line.match(/消費[日曰]\s*(\d{1,2})[\/\-](\d{1,2})/)||
+              line.match(/(\d{1,2})[\/\-](\d{1,2})\s*[-·]\s*入帳/);
+    if(!dm)continue;
+    const date=inferDate(dm[1],dm[2]);
 
-    // 往上找消費日（最多往前掃 6 行）
-    let date='',nameIdx=-1;
-    for(let j=i-1;j>=Math.max(0,i-6);j--){
-      // 格式一：消費日 MM/DD
-      const dm=lines[j].match(/消費日\s*(\d{1,2})\/(\d{1,2})/);
-      if(dm){date=inferDate(dm[1],dm[2]);nameIdx=j-1;break;}
-      // 格式二：MM/DD（單獨一行，像某些 app）
-      const dm2=lines[j].match(/^(\d{1,2})\/(\d{1,2})\s*$/);
-      if(dm2){date=inferDate(dm2[1],dm2[2]);nameIdx=j-1;break;}
-    }
-    if(!date||nameIdx<0||nameIdx>=lines.length)continue;
-
-    // 找商家名稱（往前找第一個非空、非日期、非說明行）
+    // 往上找商家名稱
     let name='';
-    for(let k=nameIdx;k>=Math.max(0,nameIdx-2);k--){
-      const candidate=lines[k].replace(/NT\$.*$/,'').trim();
-      if(!candidate||candidate.length<2)continue;
-      if(FB_NAME_SKIP.some(w=>candidate.includes(w)))continue;
-      if(/^[\d\s\.\*\/\-]+$/.test(candidate))continue;// 純數字/符號行
-      if(/^\.*\s*\d{4}$/.test(candidate))continue;// 卡號末 4 碼
-      name=candidate.slice(0,40);
-      break;
+    for(let k=i-1;k>=Math.max(0,i-4);k--){
+      let c=lines[k].replace(/N[T丁][S\$＄]\s*[\d,]+.*/gi,'').replace(/^\d{2}\/\d{2}\s*/,'').trim();
+      if(!c||c.length<2)continue;
+      if(FB_NAME_SKIP.some(w=>c.includes(w)))continue;
+      if(/^[\d\s\.\*\/\-·,]+$/.test(c))continue;
+      if(/^\.*\s*\d{3,4}$/.test(c))continue;// 卡號末幾碼
+      name=c.slice(0,40);break;
     }
     if(!name)continue;
 
-    // 去重（同日期+名稱，保留最後一筆，即折後金額）
+    // 往下找 NT$ 金額（同行 / 下方 1~5 行，遇到下一個「消費日」停止）
+    let amt=0;
+    const checkAmtLine=(l)=>{
+      const amts=extractNTAmounts(l);
+      if(amts.length){const v=amts[amts.length-1];if(v>0&&v<500000)return v;}
+      return 0;
+    };
+    // 先查同行
+    amt=checkAmtLine(line);
+    if(!amt){
+      for(let j=i+1;j<=Math.min(lines.length-1,i+6);j++){
+        if(lines[j].match(/消費[日曰]/))break;// 碰到下一筆就停
+        amt=checkAmtLine(lines[j]);
+        if(amt)break;
+      }
+    }
+    if(!amt)continue;
+
     const key=date+'|'+name;
     if(seen.has(key)){
       const ex=fbItems.find(x=>x.date===date&&x.name===name);
-      if(ex)ex.amount=amt;
+      if(ex&&amt<ex.amount)ex.amount=amt;// 保留折後（較小）金額
       continue;
     }
     seen.add(key);
@@ -1692,7 +1704,13 @@ function parseOcrText(text){
 function renderOcrResults(){
   const statusEl=document.getElementById('ocr-status');
   const resultsEl=document.getElementById('ocr-results');
-  if(!ocrItems.length){statusEl.textContent='⚠️ 未偵測到消費項目，請手動輸入或嘗試更清晰的截圖。';statusEl.style.color='var(--orange)';return;}
+  if(!ocrItems.length){
+    statusEl.textContent='⚠️ 未偵測到消費項目，請展開下方「查看原始 OCR 文字」確認辨識內容。';
+    statusEl.style.color='var(--orange)';
+    resultsEl.style.display='block';// 顯示 debug section 即使 0 筆
+    document.getElementById('ocr-result-list').innerHTML='';
+    return;
+  }
   statusEl.textContent=`✅ 偵測到 ${ocrItems.length} 筆消費`;statusEl.style.color='var(--accent)';
   resultsEl.style.display='block';
   const list=document.getElementById('ocr-result-list');
