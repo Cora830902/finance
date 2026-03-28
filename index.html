@@ -757,8 +757,9 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <div id="ocr-results" style="display:none">
         <div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:8px">📋 辨識結果（可逐筆編輯後匯入）</div>
         <div id="ocr-result-list"></div>
+        <button onclick="addManualOcrRow()" style="width:100%;margin:4px 0 8px;background:none;border:1px dashed var(--border);color:var(--accent);border-radius:8px;padding:7px;font-size:12px;cursor:pointer">＋ 手動新增一筆</button>
         <!-- Raw OCR debug (collapsible) -->
-        <details style="margin-top:8px">
+        <details style="margin-top:4px">
           <summary style="font-size:10px;color:var(--muted);cursor:pointer;user-select:none">🔍 查看原始 OCR 文字（除錯用）</summary>
           <pre id="ocr-raw-text" style="font-size:10px;color:var(--muted);background:var(--bg2);border-radius:6px;padding:8px;margin-top:4px;max-height:150px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"></pre>
         </details>
@@ -1613,6 +1614,16 @@ function parseOcrText(text){
   function extractNTAmounts(line){
     return [...line.matchAll(/N[T丁][S\$＄]\s*([\d,]+)/gi)].map(m=>Number(m[1].replace(/,/g,'')));
   }
+  // 去除 OCR 在每個字間插入的空格（例如「波 西 塔 諾」→「波西塔諾」）
+  function deSpace(s){
+    let r=s;
+    // 連續兩次去除：中文-空格-中文/英數、英數-空格-中文
+    for(let t=0;t<3;t++){
+      r=r.replace(/([\u4e00-\u9fff])\s+([\u4e00-\u9fffa-zA-Z0-9])/g,'$1$2')
+         .replace(/([a-zA-Z0-9])\s+([\u4e00-\u9fff])/g,'$1$2');
+    }
+    return r.replace(/\s+/g,' ').trim();
+  }
   // 推算年份（跨年帳單：月份比帳單月大很多代表上一年）
   function inferDate(mStr,dStr){
     const m=parseInt(mStr),d=parseInt(dStr);
@@ -1638,7 +1649,7 @@ function parseOcrText(text){
       if(ln.match(FC_DATE_AMT))break;// 下一筆交易
       if(/^[\d\s\$\/\-\.,]+$/.test(ln))continue;// 純數字/符號行
       if(ln.length<2)continue;
-      name=ln.slice(0,40);break;
+      name=deSpace(ln).slice(0,40);break;
     }
     if(!name)name='消費';
     fcItems.push({name,amount:amt,date,selected:true});
@@ -1692,7 +1703,7 @@ function parseOcrText(text){
       if(FB_NAME_SKIP.some(w=>c.includes(w)))continue;
       if(/^[\d\s\.\*\/\-·,]+$/.test(c))continue;
       if(/^\.*\s*\d{3,4}$/.test(c))continue;// 卡號末幾碼
-      name=c.slice(0,40);break;
+      name=deSpace(c).slice(0,40);break;
     }
     if(!name)continue;
 
@@ -1731,20 +1742,23 @@ function renderOcrResults(){
   const statusEl=document.getElementById('ocr-status');
   const resultsEl=document.getElementById('ocr-results');
   if(!ocrItems.length){
-    statusEl.textContent='⚠️ 未偵測到消費項目，請展開下方「查看原始 OCR 文字」確認辨識內容。';
+    statusEl.textContent='⚠️ 未偵測到消費項目，可手動新增或展開下方 OCR 文字確認。';
     statusEl.style.color='var(--orange)';
-    resultsEl.style.display='block';// 顯示 debug section 即使 0 筆
+    resultsEl.style.display='block';
     document.getElementById('ocr-result-list').innerHTML='';
     return;
   }
   statusEl.textContent=`✅ 偵測到 ${ocrItems.length} 筆消費`;statusEl.style.color='var(--accent)';
   resultsEl.style.display='block';
+  renderOcrList();
+}
+function renderOcrList(){
   const list=document.getElementById('ocr-result-list');
   list.innerHTML=ocrItems.map((item,i)=>`
-    <div style="background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;gap:6px;align-items:center">
-      <input type="checkbox" id="ocr-chk-${i}" ${item.selected?'checked':''} onchange="ocrItems[${i}].selected=this.checked" style="width:16px;height:16px;flex-shrink:0">
+    <div style="background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;gap:6px;align-items:flex-start">
+      <input type="checkbox" id="ocr-chk-${i}" ${item.selected?'checked':''} onchange="ocrItems[${i}].selected=this.checked" style="width:16px;height:16px;flex-shrink:0;margin-top:6px">
       <div style="flex:1;min-width:0">
-        <input type="text" value="${item.name}" oninput="ocrItems[${i}].name=this.value"
+        <input type="text" value="${item.name.replace(/"/g,'&quot;')}" oninput="ocrItems[${i}].name=this.value"
           style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;margin-bottom:4px">
         <div style="display:flex;gap:4px">
           <input type="date" value="${item.date}" oninput="ocrItems[${i}].date=this.value"
@@ -1753,6 +1767,7 @@ function renderOcrResults(){
             style="width:90px;background:var(--bg2);border:1px solid var(--border);color:var(--accent);border-radius:6px;padding:4px 8px;font-size:12px;text-align:right;font-family:var(--mono)">
         </div>
       </div>
+      <button onclick="ocrItems.splice(${i},1);renderOcrList()" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;padding:2px 4px;flex-shrink:0;margin-top:4px" title="刪除此筆">🗑</button>
     </div>`).join('');
 }
 function importOcrItems(){
@@ -1769,6 +1784,17 @@ function importOcrItems(){
   try{localStorage.setItem('lastCCMonth',mo);}catch(e){}
   save();closeModal('ocr-modal');renderCC();
   alert(`✅ 已匯入 ${selected.length} 筆消費`);
+}
+function addManualOcrRow(){
+  const mo=document.getElementById('ocr-billing-month').value||new Date().toISOString().slice(0,7);
+  const today=new Date().toISOString().slice(0,10);
+  ocrItems.push({name:'',amount:0,date:today,selected:true});
+  document.getElementById('ocr-results').style.display='block';
+  document.getElementById('ocr-status').style.display='none';
+  renderOcrList();
+  // 捲動到最後一筆讓使用者看到
+  const list=document.getElementById('ocr-result-list');
+  if(list.lastElementChild)list.lastElementChild.querySelector('input[type="text"]')?.focus();
 }
 
 // ═══════════════════════════════════════════════
