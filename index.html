@@ -246,7 +246,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   <!-- ══ 信用卡 ══ -->
   <div class="tab-content active" id="tab-0" data-tab="1">
     <div class="filter-bar">
-      <input type="month" id="filter-month" onchange="renderCC()">
+      <input type="month" id="filter-month" onchange="try{localStorage.setItem('lastCCMonth',this.value)}catch(e){}renderCC()">
       <button class="btn-icon" onclick="openExpenseModal()">＋ 消費</button>
       <button class="btn-ghost" onclick="openOcrModal()">📷 截圖匯入</button>
       <button class="btn-ghost" onclick="openBankManager()">🏦 銀行/卡片</button>
@@ -279,7 +279,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   <!-- ══ 總覽 ══ -->
   <div class="tab-content" id="tab-1" data-tab="0">
     <div class="filter-bar">
-      <input type="month" id="ov-month" onchange="renderOverview()">
+      <input type="month" id="ov-month" onchange="try{localStorage.setItem('lastOvMonth',this.value)}catch(e){}renderOverview()">
     </div>
     <!-- Quick Nav -->
     <div class="quick-nav">
@@ -1128,8 +1128,10 @@ function runMigrate(){
 function initApp(){
   try{
     const now=new Date().toISOString();
-    document.getElementById('filter-month').value=now.slice(0,7);
-    document.getElementById('ov-month').value=now.slice(0,7);
+    const savedCCMo=localStorage.getItem('lastCCMonth')||now.slice(0,7);
+    const savedOvMo=localStorage.getItem('lastOvMonth')||now.slice(0,7);
+    document.getElementById('filter-month').value=savedCCMo;
+    document.getElementById('ov-month').value=savedOvMo;
     document.getElementById('exp-date').value=now.slice(0,10);
     document.getElementById('st-date').value=now.slice(0,10);
     document.getElementById('debt-date').value=now.slice(0,10);
@@ -1182,9 +1184,33 @@ function setCCView(v,el){
 function getExpBillingMonth(e){
   return e.billingMonth||(e.date?e.date.slice(0,7):'');
 }
+// Returns number of months from month string a to b (b - a)
+function monthDiff(a,b){
+  const [ay,am]=a.split('-').map(Number);
+  const [by,bm]=b.split('-').map(Number);
+  return (by-ay)*12+(bm-am);
+}
+// For installment expense, returns the amount that falls in month mo (0 if not active)
+function getInstAmtForMonth(e,mo){
+  if(!e.isInstallment||!e.installments||!e.installments.length)return 0;
+  const start=getExpBillingMonth(e);
+  const idx=monthDiff(start,mo);
+  if(idx<0||idx>=e.installments.length)return 0;
+  return Number(e.installments[idx].amount||0);
+}
+// Returns true if installment expense has a period in month mo
+function isInstActiveInMonth(e,mo){
+  if(!e.isInstallment)return false;
+  const start=getExpBillingMonth(e);
+  const idx=monthDiff(start,mo);
+  return idx>=0&&idx<(e.installments||[]).length;
+}
 function getCardBill(cid,mo){
-  return D.expenses.filter(e=>e.cardId===cid&&getExpBillingMonth(e)===mo)
-    .reduce((s,e)=>s+(e.isInstallment?e.installments.reduce((a,i)=>a+Number(i.amount||0),0):Number(e.amount||0)),0);
+  return D.expenses.filter(e=>e.cardId===cid)
+    .reduce((s,e)=>{
+      if(e.isInstallment)return s+getInstAmtForMonth(e,mo);
+      return getExpBillingMonth(e)===mo?s+Number(e.amount||0):s;
+    },0);
 }
 function prevMonth(mo){
   const d=new Date(mo+'-01');d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7);
@@ -1225,8 +1251,12 @@ function renderCC(){
       bankBill+=bill+carry+interest;
       const billConf=isBillConfirmed(c.id,mo);
       const paidConf=isPaidConfirmed(c.id,mo);
-      // 該卡本月消費明細
-      const cardExps=D.expenses.filter(e=>e.cardId===c.id&&getExpBillingMonth(e)===mo).sort((a,b)=>b.date.localeCompare(a.date));
+      // 該卡本月消費明細（非分期：依帳單月；分期：依哪期落在本月）
+      const cardExps=D.expenses.filter(e=>{
+        if(e.cardId!==c.id)return false;
+        if(e.isInstallment)return isInstActiveInMonth(e,mo);
+        return getExpBillingMonth(e)===mo;
+      }).sort((a,b)=>b.date.localeCompare(a.date));
       const carryHtml=carry>0?`<div class="card-exp-item" style="background:#2d1a0e;border-left:2px solid var(--yellow)">
               <span class="card-exp-date" style="color:var(--yellow)">結轉</span>
               <span class="card-exp-name" style="color:var(--yellow)">${prevMonth(mo)} 未繳結轉</span>
@@ -1239,11 +1269,20 @@ function renderCC(){
             </div>`:'';
       const cardExpHTML=(carry>0||interest>0||cardExps.length)
         ?(carryHtml+interestHtml+(cardExps.length?cardExps.map(e=>{
-            const total=e.isInstallment?e.installments.reduce((s,i)=>s+Number(i.amount||0),0):Number(e.amount||0);
+            let dispAmt,dispName;
+            if(e.isInstallment){
+              const idx=monthDiff(getExpBillingMonth(e),mo);
+              const n=e.installments.length;
+              dispAmt=getInstAmtForMonth(e,mo);
+              dispName=`${e.name} <span style="font-size:10px;color:var(--accent2)">第${idx+1}/${n}期</span>`;
+            }else{
+              dispAmt=Number(e.amount||0);
+              dispName=`${e.name}`;
+            }
             return`<div class="card-exp-item">
               <span class="card-exp-date">${e.date}</span>
-              <span class="card-exp-name">${e.name}${e.category?` <span class="cat-badge">${e.category}</span>`:''}</span>
-              <span class="card-exp-amt">$${fmt(total)}</span>
+              <span class="card-exp-name">${dispName}${e.category?` <span class="cat-badge">${e.category}</span>`:''}</span>
+              <span class="card-exp-amt">$${fmt(dispAmt)}</span>
               <button onclick="editExpense('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:0 2px">✏</button>
               <button onclick="delExpense('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--red);padding:0 2px">🗑</button>
             </div>`;
@@ -1296,10 +1335,19 @@ function toggleBank(bid){
 function renderExpenses(mo){
   let filtered=[];
   if(ccView==='all'||ccView==='monthly'){
-    filtered=D.expenses.filter(e=>getExpBillingMonth(e)===mo);
+    // 非分期：依帳單月篩選；分期：依哪期落在本月
+    filtered=D.expenses.filter(e=>e.isInstallment?isInstActiveInMonth(e,mo):getExpBillingMonth(e)===mo);
   } else if(ccView==='yearly'){
     const yr=mo.slice(0,4);
-    filtered=D.expenses.filter(e=>getExpBillingMonth(e).startsWith(yr));
+    // 非分期：帳單月份同年；分期：任一期落在該年
+    filtered=D.expenses.filter(e=>{
+      if(e.isInstallment){
+        const start=getExpBillingMonth(e);
+        const end=addMonths(start,(e.installments||[]).length-1);
+        return start.startsWith(yr)||end.startsWith(yr)||(start<yr+'-13'&&end>=yr+'-01');
+      }
+      return getExpBillingMonth(e).startsWith(yr);
+    });
   }
   filtered=filtered.sort((a,b)=>b.date.localeCompare(a.date));
   const el=document.getElementById('expense-list');
@@ -1308,21 +1356,34 @@ function renderExpenses(mo){
   if(!filtered.length){el.innerHTML='<div class="empty">此期間尚無消費</div>';return;}
   el.innerHTML=filtered.map(e=>{
     const card=findCard(e.cardId)||{color:'#888',name:'',last4:'',bankName:''};
-    const total=e.isInstallment?e.installments.reduce((s,i)=>s+Number(i.amount||0),0):Number(e.amount||0);
+    let dispAmt,instLabel='';
+    if(e.isInstallment&&(ccView==='all'||ccView==='monthly')){
+      const idx=monthDiff(getExpBillingMonth(e),mo);
+      const n=(e.installments||[]).length;
+      dispAmt=getInstAmtForMonth(e,mo);
+      instLabel=`<span class="inst-badge">第${idx+1}/${n}期</span>`;
+    }else if(e.isInstallment){
+      dispAmt=e.installments.reduce((s,i)=>s+Number(i.amount||0),0);
+      instLabel=`<span class="inst-badge">分${e.installments.length}期</span>`;
+    }else{
+      dispAmt=Number(e.amount||0);
+    }
     return`<div class="expense-row">
       <div class="exp-dot" style="background:${card.color}"></div>
       <div class="exp-info">
-        <div class="exp-name">${e.name}${e.isInstallment?`<span class="inst-badge">分${e.installments.length}期</span>`:''}<span class="cat-badge">${e.category||''}</span></div>
+        <div class="exp-name">${e.name}${instLabel}<span class="cat-badge">${e.category||''}</span></div>
         <div class="exp-meta">${e.date} · ${card.owner?card.owner+' · ':''}${card.bankName} ${card.name} ${card.last4}</div>
         ${e.note?`<div class="exp-note-text">${e.note}</div>`:''}
-        ${e.isInstallment?`<div class="inst-detail">${e.installments.map(i=>`<span>第${i.seq}期 $${fmt(i.amount)}</span>`).join('')}</div>`:''}
       </div>
       <div class="exp-right">
-        <div class="exp-amt">NT$ ${fmt(total)}</div>
+        <div class="exp-amt">NT$ ${fmt(dispAmt)}</div>
         <div class="exp-actions"><button onclick="editExpense('${e.id}')">✏</button><button onclick="delExpense('${e.id}')">🗑</button></div>
       </div>
     </div>`;
   }).join('');
+}
+function addMonths(mo,n){
+  const d=new Date(mo+'-01');d.setMonth(d.getMonth()+n);return d.toISOString().slice(0,7);
 }
 
 function toggleBillConfirm(cid,mo){
