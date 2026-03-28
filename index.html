@@ -1296,7 +1296,7 @@ function renderCC(){
         if(e.cardId!==c.id)return false;
         if(e.isInstallment)return isInstActiveInMonth(e,mo);
         return getExpBillingMonth(e)===mo;
-      }).sort((a,b)=>b.date.localeCompare(a.date));
+      }).sort((a,b)=>a.date.localeCompare(b.date));
       const carryHtml=carry>0?`<div class="card-exp-item" style="background:#2d1a0e;border-left:2px solid var(--yellow)">
               <span class="card-exp-date" style="color:var(--yellow)">結轉</span>
               <span class="card-exp-name" style="color:var(--yellow)">${prevMonth(mo)} 未繳結轉</span>
