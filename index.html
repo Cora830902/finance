@@ -1330,7 +1330,7 @@ function openCardPayModal(cid,mo){
   const paid=getPaid(cid,mo);
   const interest=getCardInterest(cid,mo);
   document.getElementById('cpay-title').textContent=`${card?.owner?card.owner+' · ':''}${card?.name||''}${card?.last4?' ('+card.last4+')':''}`;
-  document.getElementById('cpay-bill').textContent=`NT$ ${fmt(bill)}${carry>0?` (+結轉 ${fmt(carry)})':''}`;
+  document.getElementById('cpay-bill').textContent='NT$ '+fmt(bill)+(carry>0?' (+結轉 '+fmt(carry)+')':'')+(interest>0?' (+息 '+fmt(interest)+')':'');
   document.getElementById('cpay-cid').value=cid;
   document.getElementById('cpay-mo').value=mo;
   document.getElementById('cpay-paid').value=paid||'';
