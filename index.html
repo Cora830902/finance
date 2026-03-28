@@ -1620,6 +1620,31 @@ function parseOcrText(text){
     return `${yr}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   }
 
+  // ══ Format C：手機 App 清單式（DBS 等）──每筆交易三行 ══
+  // 行1: YYYY/MM/DD $金額  行2: 商家名稱  行3: 入帳起息日 MM/DD 末四碼 XXXX
+  const FC_SKIP=['入帳起息日','末四碼','帳單','合計','小計','總計','前期','繳費','繳款','信用額度','可用額度'];
+  const FC_DATE_AMT=/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})[\s\S]*?\$\s*([\d,]+)/;
+  const fcItems=[];
+  for(let i=0;i<lines.length;i++){
+    const m=lines[i].match(FC_DATE_AMT);
+    if(!m)continue;
+    const amt=Number(m[4].replace(/,/g,''));
+    if(amt<=0||amt>500000)continue;
+    const date=`${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+    let name='';
+    for(let j=i+1;j<=Math.min(lines.length-1,i+3);j++){
+      const ln=lines[j];
+      if(FC_SKIP.some(k=>ln.includes(k)))continue;
+      if(ln.match(FC_DATE_AMT))break;// 下一筆交易
+      if(/^[\d\s\$\/\-\.,]+$/.test(ln))continue;// 純數字/符號行
+      if(ln.length<2)continue;
+      name=ln.slice(0,40);break;
+    }
+    if(!name)name='消費';
+    fcItems.push({name,amount:amt,date,selected:true});
+  }
+  if(fcItems.length>0){ocrItems=fcItems;renderOcrResults();return;}
+
   // ══ Format A：表格式（PDF 帳單）每行以 YYYY/MM/DD 開頭 ══
   const FA_SKIP=['以下為','新增消費小計','應付帳款','總費用','年百分率','消費日','入帳起息日','帳單月份','幣別金額','外幣折算','ATM','網路繳款','本行帳戶繳款','銀行轉帳','自動繳費','帳戶繳款','合計','小計','總計','結欠','前期','未繳款項','您本期','頁次','頁共','信用額度','可用額度','分期未到期','利率'];
   const FA_START=/^(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/;
@@ -1636,7 +1661,8 @@ function parseOcrText(text){
     const date=parts.map((p,i)=>p.padStart(i===0?4:2,'0')).join('-');
     let name=line.replace(FA_END,'').trim();
     name=name.replace(/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\s*/g,'').replace(/\s+/g,' ').trim().slice(0,40);
-    if(!name)name='消費';
+    // 名稱必須含實際文字（排除只剩 $ 等符號的誤判）
+    if(!name||!/[\u4e00-\u9fffa-zA-Z\w]/.test(name))return;
     faItems.push({name,amount:amt,date,selected:true});
   });
   if(faItems.length>0){ocrItems=faItems;renderOcrResults();return;}
