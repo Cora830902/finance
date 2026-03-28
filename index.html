@@ -710,12 +710,13 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
           <input type="month" id="mexp-billing-month" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 8px;font-size:13px">
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:110px 1fr 90px 80px 24px;gap:4px;margin-bottom:4px;padding:0 2px">
+      <div style="display:grid;grid-template-columns:110px 1fr 90px 64px 22px 28px;gap:4px;margin-bottom:4px;padding:0 2px">
         <div style="font-size:10px;color:var(--muted)">消費日</div>
         <div style="font-size:10px;color:var(--muted)">消費名稱</div>
         <div style="font-size:10px;color:var(--muted);text-align:right">金額</div>
         <div style="font-size:10px;color:var(--muted)">分類</div>
         <div></div>
+        <div style="font-size:10px;color:var(--accent2);text-align:center">分期</div>
       </div>
       <div id="mexp-rows"></div>
       <button onclick="addMexpRow()" style="margin-top:6px;background:none;border:1px dashed var(--border);color:var(--muted);border-radius:8px;padding:7px;width:100%;cursor:pointer;font-size:12px">＋ 新增一行</button>
@@ -1584,15 +1585,58 @@ function addMexpRow(){
   const row=document.createElement('div');
   row.className='mexp-row';
   row.id='mexp-row-'+idx;
-  row.style.cssText='display:grid;grid-template-columns:110px 1fr 90px 80px 24px;gap:4px;align-items:center;margin-bottom:5px';
   row.innerHTML=`
-    <input type="date" value="${today}" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 6px;font-size:12px;width:100%">
-    <input type="text" placeholder="消費名稱" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12px;width:100%">
-    <input type="number" placeholder="0" style="background:var(--bg3);border:1px solid var(--border);color:var(--accent);border-radius:6px;padding:6px 8px;font-size:12px;text-align:right;width:100%;font-family:var(--mono)">
-    <select style="background:var(--bg3);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 4px;font-size:12px;width:100%">${catOpts}</select>
-    <button onclick="this.closest('.mexp-row').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0;line-height:1">✕</button>`;
+    <div style="display:grid;grid-template-columns:110px 1fr 90px 64px 22px 28px;gap:4px;align-items:center;margin-bottom:2px">
+      <input type="date" value="${today}" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 6px;font-size:12px;width:100%">
+      <input type="text" placeholder="消費名稱" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12px;width:100%">
+      <input type="number" placeholder="0" class="mexp-amt" style="background:var(--bg3);border:1px solid var(--border);color:var(--accent);border-radius:6px;padding:6px 8px;font-size:12px;text-align:right;width:100%;font-family:var(--mono)">
+      <select class="mexp-cat" style="background:var(--bg3);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 4px;font-size:12px;width:100%">${catOpts}</select>
+      <button onclick="this.closest('.mexp-row').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0;line-height:1">✕</button>
+      <button onclick="toggleMexpInst(${idx})" class="mexp-inst-btn" title="啟用分期" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:5px;cursor:pointer;font-size:10px;padding:2px 3px;line-height:1.6;font-weight:700">分</button>
+    </div>
+    <div class="mexp-inst-section" style="display:none;background:var(--bg2);border:1px solid var(--accent2);border-radius:8px;padding:8px 10px;margin-bottom:4px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--accent2);font-weight:700">📅 分期</span>
+        <label style="font-size:11px;color:var(--muted)">期數
+          <input type="number" min="1" max="60" value="12" class="mexp-inst-count" oninput="autoMexpInst(${idx})"
+            style="width:48px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;font-size:12px;margin-left:4px">
+        </label>
+        <label style="font-size:11px;color:var(--muted)">消費總金額
+          <input type="number" placeholder="0" class="mexp-inst-total" oninput="autoMexpInst(${idx})"
+            style="width:80px;background:var(--bg3);border:1px solid var(--border);color:var(--accent);border-radius:6px;padding:3px 6px;font-size:12px;font-family:var(--mono);margin-left:4px">
+        </label>
+        <span style="font-size:11px;color:var(--muted)">每期 <span class="mexp-per-period" style="color:var(--accent2);font-weight:700">—</span></span>
+      </div>
+    </div>`;
   document.getElementById('mexp-rows').appendChild(row);
   row.querySelector('input[type=text]').focus();
+}
+function toggleMexpInst(idx){
+  const row=document.getElementById('mexp-row-'+idx);
+  if(!row)return;
+  const sec=row.querySelector('.mexp-inst-section');
+  const btn=row.querySelector('.mexp-inst-btn');
+  const amtInput=row.querySelector('.mexp-amt');
+  const isOn=sec.style.display!=='none';
+  if(isOn){
+    sec.style.display='none';
+    btn.style.color='var(--muted)';btn.style.borderColor='var(--border)';
+    amtInput.placeholder='0';
+  } else {
+    sec.style.display='block';
+    btn.style.color='var(--accent2)';btn.style.borderColor='var(--accent2)';
+    amtInput.placeholder='首期金額(選填)';
+    if(amtInput.value)row.querySelector('.mexp-inst-total').value=amtInput.value;
+    autoMexpInst(idx);
+  }
+}
+function autoMexpInst(idx){
+  const row=document.getElementById('mexp-row-'+idx);
+  if(!row)return;
+  const count=Number(row.querySelector('.mexp-inst-count').value)||0;
+  const total=Number(row.querySelector('.mexp-inst-total').value)||0;
+  const per=count>0?Math.round(total/count):0;
+  row.querySelector('.mexp-per-period').textContent=per>0?'NT$'+fmt(per):'—';
 }
 function saveMexpAll(){
   const cardId=document.getElementById('mexp-card').value;
@@ -1601,13 +1645,31 @@ function saveMexpAll(){
   const rows=[...document.querySelectorAll('.mexp-row')];
   let count=0;
   rows.forEach(row=>{
-    const inputs=row.querySelectorAll('input');
-    const date=inputs[0].value;
-    const name=inputs[1].value.trim();
-    const amt=Number(inputs[2].value)||0;
-    const cat=row.querySelector('select').value;
-    if(!name||amt<=0)return;
-    D.expenses.push({id:uid(),cardId,date,billingMonth:mo,name,category:cat,note:'',isInstallment:false,amount:String(amt),installments:[]});
+    const mainInputs=row.querySelectorAll('input[type=date],input[type=text],input.mexp-amt');
+    const date=mainInputs[0].value;
+    const name=mainInputs[1].value.trim();
+    const cat=row.querySelector('select.mexp-cat').value;
+    if(!name)return;
+    const instSec=row.querySelector('.mexp-inst-section');
+    const isInst=instSec&&instSec.style.display!=='none';
+    if(isInst){
+      const instCount=Number(row.querySelector('.mexp-inst-count').value)||0;
+      const instTotal=Number(row.querySelector('.mexp-inst-total').value)||0;
+      if(instCount<=0||instTotal<=0)return;
+      const per=Math.round(instTotal/instCount);
+      const installments=[];
+      let remaining=instTotal;
+      for(let i=0;i<instCount;i++){
+        const amt=i===instCount-1?remaining:per;
+        remaining-=per;
+        installments.push({seq:i+1,amount:String(amt)});
+      }
+      D.expenses.push({id:uid(),cardId,date,billingMonth:mo,name,category:cat,note:'',isInstallment:true,amount:'0',installments});
+    } else {
+      const amt=Number(row.querySelector('.mexp-amt').value)||0;
+      if(amt<=0)return;
+      D.expenses.push({id:uid(),cardId,date,billingMonth:mo,name,category:cat,note:'',isInstallment:false,amount:String(amt),installments:[]});
+    }
     count++;
   });
   if(!count){alert('請填寫至少一筆有名稱和金額的消費');return;}
@@ -1966,27 +2028,41 @@ function openBankManager(){
   renderBankManager();
   document.getElementById('bank-modal').classList.add('open');
 }
+function handleBankOwnerSelect(evt,bi){
+  if(evt.target.value==='__custom__'){
+    const name=prompt('輸入持卡人名稱：');
+    if(!name){evt.target.value=bankMgrState[bi].owner||getOwnerList()[0]||'';return;}
+    if(!D.cardOwners)D.cardOwners=getOwnerList();
+    if(!D.cardOwners.includes(name))D.cardOwners.push(name);
+    bankMgrState[bi].owner=name;
+    renderBankManager();
+  } else {
+    bankMgrState[bi].owner=evt.target.value;
+  }
+}
 function renderBankManager(){
-  // 補齊沒有 owner 的卡片，預設為第一個選項
   const defaultOwner=getOwnerList()[0]||'';
-  bankMgrState.forEach(b=>b.cards.forEach(c=>{if(!c.owner)c.owner=defaultOwner;}));
+  // 補齊銀行層級 owner（從第一張卡繼承，或用預設值）
+  bankMgrState.forEach(b=>{
+    if(!b.owner)b.owner=(b.cards[0]&&b.cards[0].owner)||defaultOwner;
+  });
   document.getElementById('bank-manager-list').innerHTML=bankMgrState.map((b,bi)=>`
     <div style="background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:10px">
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
         <input type="color" value="${b.color}" onchange="bankMgrState[${bi}].color=this.value;renderBankManager()" style="width:32px;height:28px">
+        <select onchange="handleBankOwnerSelect(event,${bi})" style="width:70px;background:var(--bg2);border:1px solid var(--border);color:var(--accent2);border-radius:6px;padding:5px 4px;font-size:12px;flex-shrink:0">
+          ${getOwnerOptions(b.owner||'')}
+        </select>
         <input value="${b.name}" onchange="bankMgrState[${bi}].name=this.value" style="flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:13px">
         <button onclick="bankMgrState.splice(${bi},1);renderBankManager()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px">🗑</button>
       </div>
       ${b.cards.map((c,ci)=>`
         <div style="display:flex;gap:5px;align-items:center;margin-bottom:6px;padding-left:8px;flex-wrap:wrap">
-          <select onchange="handleOwnerSelect(event,${bi},${ci})" style="width:68px;background:var(--bg2);border:1px solid var(--border);color:var(--accent2);border-radius:6px;padding:5px 4px;font-size:12px">
-            ${getOwnerOptions(c.owner||'')}
-          </select>
           <input placeholder="卡片名稱" value="${c.name}" onchange="bankMgrState[${bi}].cards[${ci}].name=this.value" style="flex:1;min-width:80px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-size:12px">
           <input placeholder="末四碼" value="${c.last4}" maxlength="4" onchange="bankMgrState[${bi}].cards[${ci}].last4=this.value" style="width:52px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--mono)">
           <button onclick="bankMgrState[${bi}].cards.splice(${ci},1);renderBankManager()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">×</button>
         </div>`).join('')}
-      <button onclick="bankMgrState[${bi}].cards.push({id:uid(),name:'新卡片',last4:'',owner:getOwnerList()[0]||''});renderBankManager()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;padding-left:8px">＋ 新增卡片</button>
+      <button onclick="bankMgrState[${bi}].cards.push({id:uid(),name:'新卡片',last4:''});renderBankManager()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;padding-left:8px">＋ 新增卡片</button>
     </div>`).join('');
 }
 function addBankInManager(){
@@ -1994,6 +2070,8 @@ function addBankInManager(){
   renderBankManager();
 }
 function saveBankManager(){
+  // 將銀行層級的持卡人寫入每張卡片
+  bankMgrState.forEach(b=>b.cards.forEach(c=>{c.owner=b.owner||'';}));
   D.banks=bankMgrState;save();closeModal('bank-modal');rebuildExpCardSelect();renderCC();
 }
 function setupDefaultCards(){
@@ -3394,7 +3472,7 @@ Object.assign(window,{
   switchTab,setCCView,openExpenseModal,editExpense,delExpense,
   toggleInst,buildInstFields,saveExpense,autoCalcInst,
   openOcrModal,handleOcrDrop,handleOcrFile,importOcrItems,
-  openBankManager,renderBankManager,addBankInManager,saveBankManager,setupDefaultCards,
+  openBankManager,renderBankManager,addBankInManager,saveBankManager,setupDefaultCards,handleBankOwnerSelect,toggleMexpInst,autoMexpInst,
   getExpBillingMonth,handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,saveCardPay,getCardInterest,renderAnnualInterest,openBankPayModal,saveBankPay,
   openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,calcStockTotal,calcTradeAmt,calcDivIncome,renderDividends,setStockListView,
   openSymbolManager,renderSymbolManager,addSymbolInManager,deleteSymbol,moveSymbol,onTickerInput,onNameInput,
