@@ -694,6 +694,38 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 </div>
 
+<!-- ══ Multi-Expense Add Modal ══ -->
+<div class="modal-overlay" id="multi-exp-modal">
+  <div class="modal-box" style="max-width:640px">
+    <div class="modal-header"><span>➕ 新增消費明細</span><button class="close-btn" onclick="closeModal('multi-exp-modal')">✕</button></div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:12px;align-items:end">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">信用卡</div>
+          <select id="mexp-card" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 11px;font-size:13px"></select>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">帳單月份</div>
+          <input type="month" id="mexp-billing-month" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 8px;font-size:13px">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:110px 1fr 90px 80px 24px;gap:4px;margin-bottom:4px;padding:0 2px">
+        <div style="font-size:10px;color:var(--muted)">消費日</div>
+        <div style="font-size:10px;color:var(--muted)">消費名稱</div>
+        <div style="font-size:10px;color:var(--muted);text-align:right">金額</div>
+        <div style="font-size:10px;color:var(--muted)">分類</div>
+        <div></div>
+      </div>
+      <div id="mexp-rows"></div>
+      <button onclick="addMexpRow()" style="margin-top:6px;background:none;border:1px dashed var(--border);color:var(--muted);border-radius:8px;padding:7px;width:100%;cursor:pointer;font-size:12px">＋ 新增一行</button>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal('multi-exp-modal')">取消</button>
+        <button class="btn btn-primary" style="flex:1" onclick="saveMexpAll()">✅ 全部儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ OCR Import Modal ══ -->
 <div class="modal-overlay" id="ocr-modal">
   <div class="modal-box">
@@ -714,7 +746,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <!-- Upload area -->
       <label id="ocr-drop-area" style="display:block;border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;margin-bottom:10px;transition:border-color .2s" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleOcrDrop(event)">
         <div style="font-size:24px;margin-bottom:6px">📸</div>
-        <div style="font-size:13px;color:var(--muted)">點擊或拖曳截圖至此</div>
+        <div style="font-size:13px;color:var(--muted)">點擊、拖曳或 <kbd style="background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:11px">Ctrl+V</kbd> 貼上截圖</div>
         <input type="file" id="ocr-file-input" accept="image/*" style="display:none" onchange="handleOcrFile(this.files[0])">
       </label>
       <canvas id="ocr-canvas" style="display:none;max-width:100%;border-radius:8px;margin-bottom:10px"></canvas>
@@ -1309,6 +1341,8 @@ function renderCC(){
             <span class="card-paid-val ${paidConf?'confirmed':''}" title="點擊切換已繳確認" onclick="togglePaidConfirm('${c.id}','${mo}',event)">繳$${fmt(paid)}</span>
             ${unpaid>0?`<span class="slash">/</span><span class="card-unpaid-val">欠$${fmt(unpaid)}</span>`:''}
           </div>
+          <button onclick="openMultiExp('${c.id}')" title="新增消費" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--accent);padding:0 2px;line-height:1">➕</button>
+          <button onclick="openOcrModal('${c.id}')" title="截圖匯入" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--muted);padding:0 2px;line-height:1">📷</button>
           <button class="card-edit-btn" onclick="openCardPayModal('${c.id}','${mo}')">✏</button>
         </div>
         ${cardExpHTML}
@@ -1436,14 +1470,14 @@ function saveCardPay(){
 //  OCR IMPORT
 // ═══════════════════════════════════════════════
 let ocrItems=[];
-function openOcrModal(){
+function openOcrModal(preCardId){
   const sel=document.getElementById('ocr-card');
   sel.innerHTML='';
   D.banks.forEach(b=>b.cards.forEach(c=>{
     const owner=c.owner?`[${c.owner}] `:'';
     sel.innerHTML+=`<option value="${c.id}">${owner}${b.name} — ${c.name}${c.last4?' ('+c.last4+')':''}</option>`;
   }));
-  // Default billing month to current CC filter month
+  if(preCardId)sel.value=preCardId;
   document.getElementById('ocr-billing-month').value=document.getElementById('filter-month').value||new Date().toISOString().slice(0,7);
   document.getElementById('ocr-canvas').style.display='none';
   document.getElementById('ocr-status').style.display='none';
@@ -1455,7 +1489,71 @@ function openOcrModal(){
 document.addEventListener('DOMContentLoaded',()=>{
   const dropArea=document.getElementById('ocr-drop-area');
   if(dropArea)dropArea.addEventListener('click',()=>document.getElementById('ocr-file-input').click());
+  // Ctrl+V / paste support: paste image directly into OCR modal
+  document.addEventListener('paste',e=>{
+    if(!document.getElementById('ocr-modal').classList.contains('open'))return;
+    const items=[...(e.clipboardData||e.originalEvent?.clipboardData||{items:[]}).items||[]];
+    const imgItem=items.find(i=>i.type.startsWith('image/'));
+    if(imgItem){e.preventDefault();handleOcrFile(imgItem.getAsFile());}
+  });
 });
+
+// ── Multi-Expense Add Modal ─────────────────────
+const MEXP_CATS=['餐飲','交通','購物','娛樂','旅遊','醫療','超市','加油','其他'];
+let mexpRowCount=0;
+function openMultiExp(preCardId){
+  const sel=document.getElementById('mexp-card');
+  sel.innerHTML='';
+  D.banks.forEach(b=>b.cards.forEach(c=>{
+    const owner=c.owner?`[${c.owner}] `:'';
+    sel.innerHTML+=`<option value="${c.id}">${owner}${b.name} — ${c.name}${c.last4?' ('+c.last4+')':''}</option>`;
+  }));
+  if(preCardId)sel.value=preCardId;
+  document.getElementById('mexp-billing-month').value=document.getElementById('filter-month').value||new Date().toISOString().slice(0,7);
+  mexpRowCount=0;
+  document.getElementById('mexp-rows').innerHTML='';
+  addMexpRow();// Start with one empty row
+  document.getElementById('multi-exp-modal').classList.add('open');
+}
+function addMexpRow(){
+  const idx=mexpRowCount++;
+  const today=new Date().toISOString().slice(0,10);
+  const catOpts=MEXP_CATS.map(c=>`<option${c==='其他'?' selected':''}>${c}</option>`).join('');
+  const row=document.createElement('div');
+  row.className='mexp-row';
+  row.id='mexp-row-'+idx;
+  row.style.cssText='display:grid;grid-template-columns:110px 1fr 90px 80px 24px;gap:4px;align-items:center;margin-bottom:5px';
+  row.innerHTML=`
+    <input type="date" value="${today}" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 6px;font-size:12px;width:100%">
+    <input type="text" placeholder="消費名稱" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12px;width:100%">
+    <input type="number" placeholder="0" style="background:var(--bg3);border:1px solid var(--border);color:var(--accent);border-radius:6px;padding:6px 8px;font-size:12px;text-align:right;width:100%;font-family:var(--mono)">
+    <select style="background:var(--bg3);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 4px;font-size:12px;width:100%">${catOpts}</select>
+    <button onclick="this.closest('.mexp-row').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0;line-height:1">✕</button>`;
+  document.getElementById('mexp-rows').appendChild(row);
+  row.querySelector('input[type=text]').focus();
+}
+function saveMexpAll(){
+  const cardId=document.getElementById('mexp-card').value;
+  const mo=document.getElementById('mexp-billing-month').value||new Date().toISOString().slice(0,7);
+  if(!cardId){alert('請選擇信用卡');return;}
+  const rows=[...document.querySelectorAll('.mexp-row')];
+  let count=0;
+  rows.forEach(row=>{
+    const inputs=row.querySelectorAll('input');
+    const date=inputs[0].value;
+    const name=inputs[1].value.trim();
+    const amt=Number(inputs[2].value)||0;
+    const cat=row.querySelector('select').value;
+    if(!name||amt<=0)return;
+    D.expenses.push({id:uid(),cardId,date,billingMonth:mo,name,category:cat,note:'',isInstallment:false,amount:String(amt),installments:[]});
+    count++;
+  });
+  if(!count){alert('請填寫至少一筆有名稱和金額的消費');return;}
+  document.getElementById('filter-month').value=mo;
+  try{localStorage.setItem('lastCCMonth',mo);}catch(e){}
+  save();closeModal('multi-exp-modal');renderCC();
+  alert(`✅ 已新增 ${count} 筆消費`);
+}
 function handleOcrDrop(e){
   e.preventDefault();
   document.getElementById('ocr-drop-area').style.borderColor='var(--border)';
