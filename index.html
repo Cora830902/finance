@@ -227,8 +227,8 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     <div><div class="app-title">家庭財務管理</div><div class="app-sub">信用卡 · 股票 · 借貸 · 黃金</div></div>
   </div>
   <div class="tab-bar">
-    <button class="tab-btn active" onclick="switchTab(0)">💳 信用卡</button>
-    <button class="tab-btn" onclick="switchTab(1)">📊 總覽</button>
+    <button class="tab-btn" onclick="switchTab(0)">📊 總覽</button>
+    <button class="tab-btn active" onclick="switchTab(1)">💳 信用卡</button>
     <button class="tab-btn" onclick="switchTab(2)">📈 股票</button>
     <button class="tab-btn" onclick="switchTab(3)">🤝 借貸</button>
     <button class="tab-btn" onclick="switchTab(4)">🥇 黃金</button>
@@ -237,7 +237,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 
   <!-- ══ 信用卡 ══ -->
-  <div class="tab-content active" id="tab-0">
+  <div class="tab-content active" id="tab-0" data-tab="1">
     <div class="filter-bar">
       <input type="month" id="filter-month" onchange="renderCC()">
       <button class="btn-icon" onclick="openExpenseModal()">＋ 消費</button>
@@ -261,7 +261,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 
   <!-- ══ 總覽 ══ -->
-  <div class="tab-content" id="tab-1">
+  <div class="tab-content" id="tab-1" data-tab="0">
     <div class="filter-bar">
       <input type="month" id="ov-month" onchange="renderOverview()">
     </div>
@@ -346,7 +346,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 
   <!-- ══ 股票 ══ -->
-  <div class="tab-content" id="tab-2">
+  <div class="tab-content" id="tab-2" data-tab="2">
     <div class="filter-bar"><button class="btn-icon" onclick="openStockModal()">＋ 新增</button></div>
 
     <!-- 1. 已實現總損益（永遠顯示全部total，不受明細篩選影響） -->
@@ -432,7 +432,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 
   <!-- ══ 借貸 ══ -->
-  <div class="tab-content" id="tab-3">
+  <div class="tab-content" id="tab-3" data-tab="3">
     <div class="filter-bar">
       <button class="btn-icon" onclick="openDebtModal()">＋ 新增記錄</button>
       <button class="btn-ghost" onclick="openPersonManager()">👤 管理人員</button>
@@ -445,7 +445,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 
   <!-- ══ 黃金 ══ -->
-  <div class="tab-content" id="tab-4">
+  <div class="tab-content" id="tab-4" data-tab="4">
     <div class="filter-bar">
       <button class="btn-icon" onclick="openGoldModal('buy')">＋ 買入</button>
       <button class="btn-ghost" onclick="openGoldModal('sell')">賣出</button>
@@ -462,31 +462,63 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 
   <!-- ══ 定存 ══ -->
-  <div class="tab-content" id="tab-5">
-    <div class="filter-bar"><button class="btn-icon" onclick="openDepositModal()">＋ 新增定存</button></div>
-
-    <!-- 摘要 -->
-    <div id="deposit-summary-box" style="display:none;background:#0e2240;border:1px solid #1d4070;border-radius:12px;padding:12px 14px;margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:10px;color:var(--muted)">總本金</span>
-        <span id="dep-total-principal" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--yellow)">NT$ 0</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:10px;color:var(--muted)">預計總利息（稅前）</span>
-        <span id="dep-total-interest" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent)">NT$ 0</span>
-      </div>
-      <div style="border-top:1px solid #1d4070;padding-top:8px;display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:11px;color:var(--muted)">最近到期</span>
-        <span id="dep-next-maturity" style="font-size:12px;font-weight:700;color:var(--text)">—</span>
-      </div>
+  <div class="tab-content" id="tab-5" data-tab="5">
+    <!-- 子頁籤 -->
+    <div class="view-tabs" id="dep-view-tabs" style="margin-bottom:12px">
+      <div class="view-tab active" onclick="switchDepView('mine',this)">我的定存</div>
+      <div class="view-tab" onclick="switchDepView('market',this)">市場利率參考</div>
     </div>
 
-    <!-- 定存列表 -->
-    <div id="deposit-list"><div class="empty" style="padding:40px 0">尚無定存記錄<br><span style="font-size:11px;color:var(--muted)">點右上角「＋ 新增定存」開始記錄</span></div></div>
+    <!-- ── 我的定存 ── -->
+    <div id="dep-mine-view">
+      <div class="filter-bar"><button class="btn-icon" onclick="openDepositModal()">＋ 新增定存</button></div>
+
+      <!-- 摘要 -->
+      <div id="deposit-summary-box" style="display:none;background:#0e2240;border:1px solid #1d4070;border-radius:12px;padding:12px 14px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:10px;color:var(--muted)">總本金</span>
+          <span id="dep-total-principal" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--yellow)">NT$ 0</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:10px;color:var(--muted)">預計總利息（稅前）</span>
+          <span id="dep-total-interest" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent)">NT$ 0</span>
+        </div>
+        <div style="border-top:1px solid #1d4070;padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;color:var(--muted)">最近到期</span>
+          <span id="dep-next-maturity" style="font-size:12px;font-weight:700;color:var(--text)">—</span>
+        </div>
+      </div>
+
+      <!-- 定存列表 -->
+      <div id="deposit-list"><div class="empty" style="padding:40px 0">尚無定存記錄<br><span style="font-size:11px;color:var(--muted)">點上方「＋ 新增定存」開始記錄</span></div></div>
+    </div>
+
+    <!-- ── 市場利率參考 ── -->
+    <div id="dep-market-view" style="display:none">
+      <div style="background:#1a1a2e;border:1px solid #2d2d4e;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;color:var(--muted)">📅 資料來源：Mr.Market 市場先生 · 2026/03 更新</span>
+        <a href="https://rich01.com/twd-deposit-all/" target="_blank" style="font-size:11px;color:#60a5fa;text-decoration:none">查看最新 ↗</a>
+      </div>
+
+      <!-- 利率選擇器 -->
+      <div class="view-tabs" style="margin-bottom:10px">
+        <div class="view-tab active" onclick="switchRateTerm(3,this)">3個月</div>
+        <div class="view-tab" onclick="switchRateTerm(6,this)">6個月</div>
+        <div class="view-tab active-default" onclick="switchRateTerm(12,this)">1年</div>
+        <div class="view-tab" onclick="switchRateTerm(24,this)">2年</div>
+        <div class="view-tab" onclick="switchRateTerm(36,this)">3年</div>
+      </div>
+
+      <div id="market-rate-list"></div>
+
+      <div style="margin-top:16px;padding:10px 12px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--muted);line-height:1.8">
+        ⚠️ 以上為牌告利率，實際以各銀行為準。純網銀（將來/樂天/LINE Bank）通常較高，大額定存利率可能不同，超過 NT$20,000 利息需繳 10% 利息所得稅及 2.11% 健保補充保費。
+      </div>
+    </div>
   </div>
 
   <!-- ══ 備份與還原 ══ -->
-  <div class="tab-content" id="tab-6">
+  <div class="tab-content" id="tab-6" data-tab="6">
     <!-- 資料狀態 -->
     <div class="section-card">
       <div class="section-title">📊 目前資料狀態</div>
@@ -585,7 +617,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
         <label id="lbl-amt">金額</label><input type="number" id="exp-amount" placeholder="0">
         <label id="lbl-inst-n" style="display:none">期數</label>
         <select id="exp-inst-count" style="display:none" onchange="buildInstFields()">
-          <option>2</option><option>3</option><option>4</option><option>6</option><option>9</option><option>10</option><option>12</option><option>18</option><option>24</option><option>30</option><option>36</option>
+          <option>2</option><option>3</option><option>4</option><option>6</option><option>8</option><option>9</option><option>10</option><option>12</option><option>18</option><option>24</option><option>30</option><option>36</option>
         </select>
         <label id="lbl-inst-f" style="display:none">每期</label><div id="exp-inst-fields" class="inst-grid" style="display:none"></div>
         <label>備註</label><textarea id="exp-note" placeholder="選填備註"></textarea>
@@ -913,8 +945,8 @@ function initApp(){
   document.getElementById('gold-date').value=now.slice(0,10);
   document.getElementById('gold-price-input').value=D.gold.currentPrice||'';
   rebuildExpCardSelect();
-  try{const t=parseInt(localStorage.getItem('lastTab'));if(t>=0&&t<=6)switchTab(t);else renderCC();}
-  catch(e){renderCC();}
+  try{const t=parseInt(localStorage.getItem('lastTab'));if(t>=0&&t<=6)switchTab(t);else switchTab(1);}
+  catch(e){switchTab(1);}
 }
 
 // ── Global vars ───────────────────────────────
@@ -934,9 +966,9 @@ function switchTab(i){
   curTab=i;
   try{localStorage.setItem('lastTab',i);}catch(e){}
   document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',i===j));
-  document.querySelectorAll('.tab-content').forEach((c,j)=>c.classList.toggle('active',i===j));
-  if(i===0)renderCC();
-  if(i===1)renderOverview();
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active',Number(c.dataset.tab)===i));
+  if(i===0)renderOverview();
+  if(i===1)renderCC();
   if(i===2)renderStocks();
   if(i===3)renderDebt();
   if(i===4)renderGold();
@@ -953,12 +985,22 @@ function setCCView(v,el){
   renderCC();
 }
 function getExpBillingMonth(e){
-  // 優先使用帳單歸屬月，向下相容沒有此欄位的舊資料（用交易日期的月份）
   return e.billingMonth||(e.date?e.date.slice(0,7):'');
 }
 function getCardBill(cid,mo){
   return D.expenses.filter(e=>e.cardId===cid&&getExpBillingMonth(e)===mo)
     .reduce((s,e)=>s+(e.isInstallment?e.installments.reduce((a,i)=>a+Number(i.amount||0),0):Number(e.amount||0)),0);
+}
+function prevMonth(mo){
+  const d=new Date(mo+'-01');d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7);
+}
+function getCarryForward(cid,mo,depth){
+  if((depth||0)>24)return 0;
+  const prev=prevMonth(mo);
+  const prevBill=getCardBill(cid,prev);
+  const prevPaid=getPaid(cid,prev);
+  const prevCarry=getCarryForward(cid,prev,(depth||0)+1);
+  return Math.max(0,prevBill+prevCarry-prevPaid);
 }
 function getPaid(cid,mo){return Number((D.payments[cid+'_'+mo]||{}).amount||0)}
 function isPaidConfirmed(cid,mo){return !!(D.payments[cid+'_'+mo]||{}).confirmed}
@@ -966,9 +1008,9 @@ function isBillConfirmed(cid,mo){return !!(D.bills[cid+'_'+mo]||{}).confirmed}
 
 function renderCC(){
   const mo=document.getElementById('filter-month').value;
-  // Summary bar
+  // Summary bar（含上期結轉）
   let tBill=0,tPaid=0;
-  allCards().forEach(c=>{tBill+=getCardBill(c.id,mo);tPaid+=getPaid(c.id,mo);});
+  allCards().forEach(c=>{tBill+=getCardBill(c.id,mo)+getCarryForward(c.id,mo);tPaid+=getPaid(c.id,mo);});
   const tUnpaid=tBill-tPaid;
   document.getElementById('cc-summary').innerHTML=`
     <div class="sum-box"><div class="sum-box-label">本月總帳單</div><div class="sum-box-val neg">$${fmt(tBill)}</div></div>
@@ -981,23 +1023,30 @@ function renderCC(){
     let bankBill=0;
     let cardRowsHTML=b.cards.map(c=>{
       const bill=getCardBill(c.id,mo);
+      const carry=getCarryForward(c.id,mo);
       const paid=getPaid(c.id,mo);
-      const unpaid=bill-paid;
-      bankBill+=bill;
+      const unpaid=bill+carry-paid;
+      bankBill+=bill+carry;
       const billConf=isBillConfirmed(c.id,mo);
       const paidConf=isPaidConfirmed(c.id,mo);
       // 該卡本月消費明細
       const cardExps=D.expenses.filter(e=>e.cardId===c.id&&getExpBillingMonth(e)===mo).sort((a,b)=>b.date.localeCompare(a.date));
-      const cardExpHTML=cardExps.length
-        ?cardExps.map(e=>{
+      const carryHtml=carry>0?`<div class="card-exp-item" style="background:#2d1a0e;border-left:2px solid var(--yellow)">
+              <span class="card-exp-date" style="color:var(--yellow)">結轉</span>
+              <span class="card-exp-name" style="color:var(--yellow)">${prevMonth(mo)} 未繳結轉</span>
+              <span class="card-exp-amt" style="color:var(--yellow)">+$${fmt(carry)}</span>
+            </div>`:'';
+      const cardExpHTML=(carry>0||cardExps.length)
+        ?(carryHtml+(cardExps.length?cardExps.map(e=>{
             const total=e.isInstallment?e.installments.reduce((s,i)=>s+Number(i.amount||0),0):Number(e.amount||0);
             return`<div class="card-exp-item">
               <span class="card-exp-date">${e.date}</span>
               <span class="card-exp-name">${e.name}${e.category?` <span class="cat-badge">${e.category}</span>`:''}</span>
               <span class="card-exp-amt">$${fmt(total)}</span>
               <button onclick="editExpense('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:0 2px">✏</button>
+              <button onclick="delExpense('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--red);padding:0 2px">🗑</button>
             </div>`;
-          }).join('')
+          }).join(''):''))
         :'';
       return`<div>
         <div class="card-row">
@@ -2117,6 +2166,78 @@ function delGold(type,id){
 // ═══════════════════════════════════════════════
 let editDepositId=null;
 
+// 各大銀行牌告利率（2026/03 更新，來源：Mr.Market市場先生）
+const BANK_RATES=[
+  {bank:'將來銀行',type:'純網銀', r3:1.300,r6:1.475,r12:1.810,r24:1.810,r36:1.810},
+  {bank:'樂天銀行', type:'純網銀', r3:1.375,r6:1.475,r12:1.775,r24:1.785,r36:1.805},
+  {bank:'LINE Bank',type:'純網銀', r3:1.285,r6:1.480,r12:1.770,r24:1.780,r36:1.780},
+  {bank:'臺灣銀行', type:'公股',   r3:1.285,r6:1.460,r12:1.715,r24:1.750,r36:1.785},
+  {bank:'合作金庫', type:'公股',   r3:1.285,r6:1.460,r12:1.715,r24:1.730,r36:1.745},
+  {bank:'華南銀行', type:'公股',   r3:1.285,r6:1.435,r12:1.720,r24:1.760,r36:1.895},
+  {bank:'第一銀行', type:'公股',   r3:1.285,r6:1.435,r12:1.715,r24:1.895,r36:1.895},
+  {bank:'彰化銀行', type:'公股',   r3:1.285,r6:1.435,r12:1.715,r24:1.795,r36:1.895},
+  {bank:'富邦銀行', type:'民營',   r3:1.285,r6:1.455,r12:1.715,r24:1.715,r36:1.715},
+  {bank:'國泰世華', type:'民營',   r3:1.285,r6:1.425,r12:1.715,r24:1.715,r36:1.715},
+  {bank:'中國信託', type:'民營',   r3:1.285,r6:1.435,r12:1.715,r24:1.720,r36:1.720},
+  {bank:'玉山銀行', type:'民營',   r3:1.280,r6:1.425,r12:1.715,r24:1.715,r36:1.715},
+  {bank:'永豐銀行', type:'民營',   r3:1.285,r6:1.445,r12:1.715,r24:1.715,r36:1.715},
+  {bank:'台新銀行', type:'民營',   r3:1.275,r6:1.425,r12:1.715,r24:1.715,r36:1.715},
+  {bank:'星展銀行', type:'民營',   r3:1.225,r6:1.335,r12:1.705,r24:1.685,r36:1.685},
+];
+
+let depView='mine', depRateTerm=12;
+
+function switchDepView(view,btn){
+  depView=view;
+  document.querySelectorAll('#dep-view-tabs .view-tab').forEach((t,i)=>t.classList.toggle('active',i===(view==='mine'?0:1)));
+  document.getElementById('dep-mine-view').style.display=view==='mine'?'block':'none';
+  document.getElementById('dep-market-view').style.display=view==='market'?'block':'none';
+  if(view==='market')renderMarketRates();
+}
+
+function switchRateTerm(term,btn){
+  depRateTerm=term;
+  btn.closest('.view-tabs').querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  renderMarketRates();
+}
+
+function renderMarketRates(){
+  const key='r'+depRateTerm;
+  const sorted=[...BANK_RATES].sort((a,b)=>b[key]-a[key]);
+  const max=sorted[0][key];
+  const typeColor={純網銀:'#60a5fa',公股:'#6EE7B7',民營:'#c084fc'};
+  const typeIcon={純網銀:'📱',公股:'🏛️',民營:'🏦'};
+  // 找出用戶自己的定存利率做比較
+  const myRates=(D.deposits||[]).filter(d=>d.status!=='withdrawn').map(d=>Number(d.rate));
+  const myAvgRate=myRates.length?myRates.reduce((s,r)=>s+r,0)/myRates.length:null;
+  document.getElementById('market-rate-list').innerHTML=`
+    ${myAvgRate?`<div style="background:#0e2240;border:1px solid #1d4070;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;display:flex;justify-content:space-between">
+      <span style="color:var(--muted)">我的平均利率（${depRateTerm}個月）</span>
+      <span style="font-family:var(--mono);font-weight:700;color:${myAvgRate>=sorted[3][key]?'var(--accent)':'var(--yellow)'}">${myAvgRate.toFixed(3)}%</span>
+    </div>`:''}
+    ${sorted.map(b=>{
+      const rate=b[key];
+      const barPct=Math.round((rate/max)*100);
+      const isTop=rate===max;
+      const myMatch=D.deposits&&D.deposits.filter(d=>d.status!=='withdrawn'&&d.bank===b.bank).length>0;
+      return`<div style="background:${myMatch?'#0e2240':'var(--bg2)'};border:1px solid ${myMatch?'#1d4070':'var(--border)'};border-radius:10px;padding:10px 12px;margin-bottom:7px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px">${typeIcon[b.type]||'🏦'}</span>
+            <span style="font-size:13px;font-weight:${isTop?700:500};color:${isTop?'var(--text)':'var(--text)'}">${b.bank}</span>
+            <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${typeColor[b.type]}22;color:${typeColor[b.type]}">${b.type}</span>
+            ${myMatch?'<span style="font-size:10px;color:#60a5fa">✓ 我有存</span>':''}
+          </div>
+          <span style="font-family:var(--mono);font-weight:700;color:${isTop?'var(--accent)':'var(--text)'}; font-size:${isTop?14:13}px">${rate.toFixed(3)}%${isTop?' 👑':''}</span>
+        </div>
+        <div style="background:var(--bg3);border-radius:4px;height:5px;overflow:hidden">
+          <div style="height:100%;width:${barPct}%;background:${isTop?'var(--accent)':'#3b82f6'};border-radius:4px"></div>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
 function addMonths(dateStr,months){
   const d=new Date(dateStr);
   d.setMonth(d.getMonth()+months);
@@ -2415,6 +2536,7 @@ Object.assign(window,{
   openPersonManager,renderPersonManager,addPerson,
   openGoldModal,saveGold,delGold,saveGoldPrice,
   openDepositModal,saveDeposit,delDeposit,calcDepInterest,markDepositWithdrawn,renderDeposits,
+  switchDepView,switchRateTerm,renderMarketRates,
   renderBackup,manualSnapshot,exportJSON,copyJSON,importFromFile,importFromText,clearAllData,
   mergeImportFromFile,mergeImportFromText,
   closeModal,toggleBank,getOwnerOptions,getOwnerList
