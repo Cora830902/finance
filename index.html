@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>家庭財務管理</title>
+<title>家庭財務管理 v2.4</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -271,8 +271,8 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     <div id="bank-list"></div>
     <!-- Expense list -->
     <div id="expense-section">
-      <div class="section-divider" id="expense-section-title">▸ 消費明細</div>
-      <div class="expense-list" id="expense-list"></div>
+      <div class="section-divider" id="expense-section-title" onclick="toggleExpList()" style="cursor:pointer;user-select:none">▸ 消費明細 <span id="exp-list-toggle-icon" style="font-size:11px;color:var(--muted)">（點擊展開）</span></div>
+      <div class="expense-list" id="expense-list" style="display:none"></div>
     </div>
   </div>
 
@@ -1358,7 +1358,15 @@ function renderExpenses(mo){
   filtered=filtered.sort((a,b)=>b.date.localeCompare(a.date));
   const el=document.getElementById('expense-list');
   const title=document.getElementById('expense-section-title');
-  title.textContent=ccView==='yearly'?`▸ ${mo.slice(0,4)}年消費明細`:`▸ ${mo} 消費明細`;
+  const icon=document.getElementById('exp-list-toggle-icon');
+  // Yearly view: auto-expand; monthly view: respect toggle state
+  if(ccView==='yearly'){expListOpen=true;}
+  el.style.display=expListOpen?'flex':'none';
+  if(icon)icon.textContent=expListOpen?'（點擊收合）':'（點擊展開）';
+  const count=filtered.length;
+  title.innerHTML=(ccView==='yearly'?`▸ ${mo.slice(0,4)}年消費明細`:`▸ ${mo} 消費明細`)
+    +` <span style="font-size:11px;color:var(--muted);font-weight:400">${count}筆</span>`
+    +` <span id="exp-list-toggle-icon" style="font-size:11px;color:var(--muted)">${expListOpen?'（點擊收合）':'（點擊展開）'}</span>`;
   if(!filtered.length){el.innerHTML='<div class="empty">此期間尚無消費</div>';return;}
   el.innerHTML=filtered.map(e=>{
     const card=findCard(e.cardId)||{color:'#888',name:'',last4:'',bankName:''};
@@ -1390,6 +1398,12 @@ function renderExpenses(mo){
 }
 function addMonths(mo,n){
   const d=new Date(mo+'-01');d.setMonth(d.getMonth()+n);return d.toISOString().slice(0,7);
+}
+let expListOpen=false;
+function toggleExpList(){
+  expListOpen=!expListOpen;
+  document.getElementById('expense-list').style.display=expListOpen?'flex':'none';
+  document.getElementById('exp-list-toggle-icon').textContent=expListOpen?'（點擊收合）':'（點擊展開）';
 }
 
 function toggleBillConfirm(cid,mo){
