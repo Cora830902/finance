@@ -1592,61 +1592,98 @@ async function runOcr(canvas){
   }
 }
 function parseOcrText(text){
-  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>3);
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
 
-  // Keywords that indicate non-transaction lines (headers, summaries, payments)
-  const SKIP=[
-    '以下為','新增消費小計','應付帳款','總費用','年百分率',
-    '消費日','入帳起息日','帳單月份','幣別金額','外幣折算',
-    'ATM','網路繳款','本行帳戶繳款','銀行轉帳','自動繳費','帳戶繳款',
-    '合計','小計','總計','結欠','前期','未繳款項',
-    '您本期','頁次','頁共','第 頁','信用額度','可用額度',
-    '分期未到期','利率','年費','手續費總計'
-  ];
-
-  // A valid transaction line MUST start with YYYY/MM/DD
-  const START_DATE=/^(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/;
-  // The transaction amount is the LAST number at end of line (may have commas, may be negative)
-  const END_AMT=/\s(-?[\d,]+)\s*$/;
-
-  const items=[];
-
+  // ══ Format A：表格式（PDF帳單、紙本帳單）══
+  // 每行：YYYY/MM/DD YYYY/MM/DD 消費名稱 金額
+  const FA_SKIP=['以下為','新增消費小計','應付帳款','總費用','年百分率','消費日','入帳起息日','帳單月份','幣別金額','外幣折算','ATM','網路繳款','本行帳戶繳款','銀行轉帳','自動繳費','帳戶繳款','合計','小計','總計','結欠','前期','未繳款項','您本期','頁次','頁共','信用額度','可用額度','分期未到期','利率'];
+  const FA_START=/^(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/;
+  const FA_END=/\s(-?[\d,]+)\s*$/;
+  const faItems=[];
   lines.forEach(line=>{
-    // Skip header/summary/payment lines
-    if(SKIP.some(k=>line.includes(k)))return;
-
-    // Must begin with a date
-    const dateM=line.match(START_DATE);
-    if(!dateM)return;
-
-    // Must end with a number (the amount)
-    const amtM=line.match(END_AMT);
-    if(!amtM)return;
-
-    const rawAmt=amtM[1].replace(/,/g,'');
-    const amt=Number(rawAmt);
-    // Skip negative (payments/refunds) and unreasonable amounts
+    if(FA_SKIP.some(k=>line.includes(k)))return;
+    const dateM=line.match(FA_START);if(!dateM)return;
+    const amtM=line.match(FA_END);if(!amtM)return;
+    const amt=Number(amtM[1].replace(/,/g,''));
     if(amt<=0||amt>500000)return;
-
-    // Parse the transaction date (first date on line = 消費日)
     const parts=dateM[1].replace(/\//g,'-').split('-');
     if(parts.length!==3)return;
     const date=parts.map((p,i)=>p.padStart(i===0?4:2,'0')).join('-');
-
-    // Build name: strip leading date(s) and trailing amount
-    let name=line.replace(END_AMT,'').trim();
-    // Remove first date (消費日)
-    name=name.replace(/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\s*/,'');
-    // Remove second date if present (入帳起息日)
-    name=name.replace(/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\s*/,'');
-    name=name.replace(/\s+/g,' ').trim().slice(0,40);
-
-    if(!name||name.length<1)name='消費';
-
-    items.push({name,amount:amt,date,selected:true});
+    let name=line.replace(FA_END,'').trim();
+    name=name.replace(/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\s*/g,'').replace(/\s+/g,' ').trim().slice(0,40);
+    if(!name)name='消費';
+    faItems.push({name,amount:amt,date,selected:true});
   });
+  if(faItems.length>0){ocrItems=faItems;renderOcrResults();return;}
 
-  ocrItems=items;
+  // ══ Format B：手機 App 截圖（多行格式）══
+  // 每筆交易拆成多行：
+  //   [商家名稱]
+  //   消費日 MM/DD · 入帳日 MM/DD
+  //   (可能有折抵行)
+  //   NT$ X,XXX   (或 NT$ X,XXX NT$ X,XXX 折後)
+  const billingMo=document.getElementById('ocr-billing-month')?.value||new Date().toISOString().slice(0,7);
+  const bYear=parseInt(billingMo.slice(0,4));
+  const bMonth=parseInt(billingMo.slice(5,7));
+  const FB_NAME_SKIP=['本期帳單','未出帳單','e帳單','已折抵','入帳日','消費日','分期付款','手續費','帳單日','信用額度','可用','合計','小計','總計','前期','結餘','ATM','繳費','繳款'];
+
+  function inferDate(mStr,dStr){
+    const m=parseInt(mStr),d=parseInt(dStr);
+    // 若月份明顯晚於帳單月份，推測是上一年
+    const yr=(m>bMonth+3)?bYear-1:bYear;
+    return `${yr}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  }
+
+  const fbItems=[];
+  const seen=new Set();
+
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    // 必須含有 NT$
+    if(!line.includes('NT$'))continue;
+    // 取所有 NT$ 後的金額，取最後一個（折扣後）
+    const amts=[...line.matchAll(/NT\$\s*([\d,]+)/g)].map(m=>Number(m[1].replace(/,/g,'')));
+    if(!amts.length)continue;
+    const amt=amts[amts.length-1];
+    if(amt<=0||amt>500000)continue;
+
+    // 往上找消費日（最多往前掃 6 行）
+    let date='',nameIdx=-1;
+    for(let j=i-1;j>=Math.max(0,i-6);j--){
+      // 格式一：消費日 MM/DD
+      const dm=lines[j].match(/消費日\s*(\d{1,2})\/(\d{1,2})/);
+      if(dm){date=inferDate(dm[1],dm[2]);nameIdx=j-1;break;}
+      // 格式二：MM/DD（單獨一行，像某些 app）
+      const dm2=lines[j].match(/^(\d{1,2})\/(\d{1,2})\s*$/);
+      if(dm2){date=inferDate(dm2[1],dm2[2]);nameIdx=j-1;break;}
+    }
+    if(!date||nameIdx<0||nameIdx>=lines.length)continue;
+
+    // 找商家名稱（往前找第一個非空、非日期、非說明行）
+    let name='';
+    for(let k=nameIdx;k>=Math.max(0,nameIdx-2);k--){
+      const candidate=lines[k].replace(/NT\$.*$/,'').trim();
+      if(!candidate||candidate.length<2)continue;
+      if(FB_NAME_SKIP.some(w=>candidate.includes(w)))continue;
+      if(/^[\d\s\.\*\/\-]+$/.test(candidate))continue;// 純數字/符號行
+      if(/^\.*\s*\d{4}$/.test(candidate))continue;// 卡號末 4 碼
+      name=candidate.slice(0,40);
+      break;
+    }
+    if(!name)continue;
+
+    // 去重（同日期+名稱，保留最後一筆，即折後金額）
+    const key=date+'|'+name;
+    if(seen.has(key)){
+      const ex=fbItems.find(x=>x.date===date&&x.name===name);
+      if(ex)ex.amount=amt;
+      continue;
+    }
+    seen.add(key);
+    fbItems.push({name,amount:amt,date,selected:true});
+  }
+
+  ocrItems=fbItems;
   renderOcrResults();
 }
 function renderOcrResults(){
