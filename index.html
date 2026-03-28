@@ -265,42 +265,27 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     <div class="filter-bar">
       <input type="month" id="ov-month" onchange="renderOverview()">
     </div>
-    <div class="section-card" id="ov-income-section">
-      <div class="section-title">
-        <span>💰 收入</span>
-        <button class="btn btn-sm btn-ghost" onclick="addOvRow('income')">＋</button>
-      </div>
-      <div id="ov-income-list"></div>
-      <div class="total-row"><span>合計收入</span><span class="pos" id="ov-total-income">NT$ 0</span></div>
-    </div>
-    <div class="section-card">
-      <div class="section-title">
-        <span>🏠 固定支出</span>
-        <button class="btn btn-sm btn-ghost" onclick="addOvRow('fixed')">＋</button>
-      </div>
-      <div id="ov-fixed-list"></div>
-      <div class="total-row"><span>合計固定支出</span><span class="neg" id="ov-total-fixed">NT$ 0</span></div>
-    </div>
-    <div class="section-card">
-      <div class="section-title"><span>💳 信用卡帳單 (<span id="ov-month-label"></span>)</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:0 2px;margin-bottom:6px;gap:4px">
-        <span style="width:32px;flex-shrink:0">人</span>
-        <span style="flex:1">卡片</span>
-        <span style="width:32px;flex-shrink:0;text-align:center">末四</span>
-        <div style="display:flex"><span style="width:58px;text-align:right">帳單</span><span style="width:58px;text-align:right">已繳</span><span style="width:58px;text-align:right">未繳</span></div>
-      </div>
-      <div id="ov-card-rows"></div>
-      <div class="total-row" style="margin-top:8px"><span>總帳單</span><span class="neg" id="ov-total-bill">NT$ 0</span></div>
-      <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>已繳</span><span class="pos" id="ov-total-paid">NT$ 0</span></div>
-      <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;font-weight:700"><span>未繳</span><span class="warn" id="ov-total-unpaid">NT$ 0</span></div>
-    </div>
+
+    <!-- 1. 本月總剩餘 -->
     <div class="balance-highlight" id="balance-card">
       <div class="balance-label">本月總剩餘</div>
       <div class="balance-val" id="balance-val">NT$ 0</div>
       <div class="balance-sub" id="balance-sub"></div>
     </div>
 
-    <!-- RSU 區塊 -->
+    <!-- 2. 月份趨勢圖 -->
+    <div class="section-card" style="margin-top:10px">
+      <div class="section-title">📈 月份趨勢</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="chart-income" checked onchange="renderOvChart()"> <span style="color:#6EE7B7">■</span> 收入</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="chart-fixed" checked onchange="renderOvChart()"> <span style="color:#FDE68A">■</span> 固定支出</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="chart-var" onchange="renderOvChart()"> <span style="color:#FB923C">■</span> 變動支出</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="chart-card" checked onchange="renderOvChart()"> <span style="color:#F87171">■</span> 信用卡</label>
+      </div>
+      <canvas id="ov-chart" height="200"></canvas>
+    </div>
+
+    <!-- 3. RSU 區塊 -->
     <div class="section-card" style="margin-top:10px">
       <div class="section-title">
         <span>📦 孟青 RSU</span>
@@ -333,15 +318,50 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <div id="rsu-entries"></div>
     </div>
 
-    <!-- 月份趨勢圖 -->
-    <div class="section-card" style="margin-top:10px">
-      <div class="section-title">📈 月份趨勢</div>
-      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-        <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="chart-income" checked onchange="renderOvChart()"> <span style="color:#6EE7B7">■</span> 收入</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="chart-fixed" checked onchange="renderOvChart()"> <span style="color:#FDE68A">■</span> 固定支出</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="chart-card" checked onchange="renderOvChart()"> <span style="color:#F87171">■</span> 信用卡</label>
+    <!-- 4. 收入 -->
+    <div class="section-card" id="ov-income-section">
+      <div class="section-title">
+        <span>💰 收入</span>
+        <button class="btn btn-sm btn-ghost" onclick="addOvRow('income')">＋</button>
       </div>
-      <canvas id="ov-chart" height="200"></canvas>
+      <div id="ov-income-list"></div>
+      <div class="total-row"><span>合計收入</span><span class="pos" id="ov-total-income">NT$ 0</span></div>
+    </div>
+
+    <!-- 5. 固定支出 -->
+    <div class="section-card">
+      <div class="section-title">
+        <span>🏠 固定支出</span>
+        <button class="btn btn-sm btn-ghost" onclick="addOvRow('fixed')">＋</button>
+      </div>
+      <div id="ov-fixed-list"></div>
+      <div class="total-row"><span>合計固定支出</span><span class="neg" id="ov-total-fixed">NT$ 0</span></div>
+    </div>
+
+    <!-- 6. 變動支出（分期/限期項目） -->
+    <div class="section-card">
+      <div class="section-title">
+        <span>🔁 變動支出</span>
+        <button class="btn btn-sm btn-ghost" onclick="openVarExpModal()">＋</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:8px">非信用卡分期、限期費用（可設定持續幾個月）</div>
+      <div id="ov-var-list"></div>
+      <div class="total-row"><span>合計變動支出</span><span class="neg" id="ov-total-var">NT$ 0</span></div>
+    </div>
+
+    <!-- 7. 信用卡帳單 -->
+    <div class="section-card">
+      <div class="section-title"><span>💳 信用卡帳單 (<span id="ov-month-label"></span>)</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:0 2px;margin-bottom:6px;gap:4px">
+        <span style="width:32px;flex-shrink:0">人</span>
+        <span style="flex:1">卡片</span>
+        <span style="width:32px;flex-shrink:0;text-align:center">末四</span>
+        <div style="display:flex"><span style="width:58px;text-align:right">帳單</span><span style="width:58px;text-align:right">已繳</span><span style="width:58px;text-align:right">未繳</span></div>
+      </div>
+      <div id="ov-card-rows"></div>
+      <div class="total-row" style="margin-top:8px"><span>總帳單</span><span class="neg" id="ov-total-bill">NT$ 0</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>已繳</span><span class="pos" id="ov-total-paid">NT$ 0</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;font-weight:700"><span>未繳</span><span class="warn" id="ov-total-unpaid">NT$ 0</span></div>
     </div>
   </div>
 
@@ -803,6 +823,26 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 </div>
 
+<!-- ══ Variable Expense Modal ══ -->
+<div class="modal-overlay" id="var-modal">
+  <div class="modal-box">
+    <div class="modal-header"><span id="var-modal-title">新增變動支出</span><button class="close-btn" onclick="closeModal('var-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label>名稱</label><input type="text" id="var-name" placeholder="例：吸塵器分期、補習費">
+        <label>每月金額</label><input type="number" id="var-amount" placeholder="0">
+        <label>持續月數</label><input type="number" id="var-months" placeholder="1" min="1" value="1">
+        <label>開始月份</label><input type="month" id="var-start">
+        <label>備註</label><textarea id="var-note" placeholder="選填"></textarea>
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="closeModal('var-modal')">取消</button>
+          <button class="btn btn-primary" onclick="saveVarExp()">儲存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ RSU Modal ══ -->
 <div class="modal-overlay" id="rsu-modal">
   <div class="modal-box">
@@ -873,7 +913,8 @@ function defaultData(){
         {id:'f6',name:'水費',amounts:{},noMonth:{},confirmed:{}},
         {id:'f7',name:'電費',amounts:{},noMonth:{},confirmed:{}},
         {id:'f8',name:'存錢',amounts:{},noMonth:{},confirmed:{}},
-      ]
+      ],
+      variable:[]
     },
     persons:[],debts:[],stocks:[],
     stockSymbols:[],
@@ -912,9 +953,10 @@ function runMigrate(){
   try{
     if(!D.rsu)D.rsu={entries:[],futurePlanned:[]};
     if(!D.rsu.futurePlanned)D.rsu.futurePlanned=[];
-    if(!D.ovRows)D.ovRows={income:[],fixed:[]};
+    if(!D.ovRows)D.ovRows={income:[],fixed:[],variable:[]};
     if(!D.ovRows.income)D.ovRows.income=[];
     if(!D.ovRows.fixed)D.ovRows.fixed=[];
+    if(!D.ovRows.variable)D.ovRows.variable=[];
     const toRemove=['i3','i4'];
     const hasData=(row)=>Object.values(row.amounts||{}).some(v=>Number(v)>0);
     D.ovRows.income=D.ovRows.income.filter(r=>!(toRemove.includes(r.id)&&!hasData(r)));
@@ -1299,8 +1341,20 @@ function setupDefaultCards(){
 // ═══════════════════════════════════════════════
 function addOvRow(type){
   const name=prompt('項目名稱：');if(!name)return;
-  D.ovRows[type].push({id:uid(),name,amounts:{},noMonth:{},confirmed:{}});
+  const mo=document.getElementById('ov-month').value;
+  const recurring=confirm('此項目出現方式？\n\n確認(OK) = 往後每個月都有\n取消(Cancel) = 只要此月');
+  const row={id:uid(),name,amounts:{},noMonth:{},confirmed:{},recurring};
+  if(!recurring){row.startMonth=mo;row.endMonth=mo;}
+  D.ovRows[type].push(row);
   save();renderOverview();
+}
+function isRowActiveInMonth(row,mo){
+  // rows without recurring field default to always shown (backward compat)
+  if(row.recurring===false){
+    if(row.startMonth&&mo<row.startMonth)return false;
+    if(row.endMonth&&mo>row.endMonth)return false;
+  }
+  return true;
 }
 function renderOverview(){
   const mo=document.getElementById('ov-month').value;
@@ -1308,13 +1362,15 @@ function renderOverview(){
 
   function renderRows(type,listId){
     const list=document.getElementById(listId);
-    list.innerHTML=D.ovRows[type].map((row,i)=>{
+    const activeRows=D.ovRows[type].filter(row=>isRowActiveInMonth(row,mo));
+    list.innerHTML=activeRows.map(row=>{
       const isNo=row.noMonth&&row.noMonth[mo];
       const amt=isNo?0:Number(row.amounts&&row.amounts[mo]||0);
       const conf=row.confirmed&&row.confirmed[mo];
       const labelClass=type==='income'?'ov-label pink':'ov-label cream';
+      const recurBadge=row.recurring===false?`<span style="font-size:9px;color:var(--muted);margin-left:2px">單月</span>`:'';
       return`<div class="ov-row" id="ovrow-${row.id}">
-        <span class="${labelClass}">${row.name}</span>
+        <span class="${labelClass}">${row.name}${recurBadge}</span>
         ${isNo
           ?`<span class="ov-no">本月無</span>`
           :`<input type="number" value="${amt||''}" placeholder="0"
@@ -1324,13 +1380,14 @@ function renderOverview(){
         <div class="ov-actions">
           <button title="${conf?'取消確認':'確認金額（紅色）'}" onclick="toggleOvConf('${type}','${row.id}','${mo}')">${conf?'🔴':'⚪'}</button>
           <button title="本月無" onclick="toggleNoMonth('${type}','${row.id}','${mo}')">${isNo?'✅':'🚫'}</button>
-          <button title="刪除" onclick="delOvRow('${type}',${i})">🗑</button>
+          <button title="刪除" onclick="delOvRow('${type}','${row.id}','${mo}')">🗑</button>
         </div>
       </div>`;
     }).join('');
   }
   renderRows('income','ov-income-list');
   renderRows('fixed','ov-fixed-list');
+  renderVarExps(mo);
   recalcOverview(mo);
 }
 function setOvAmt(type,id,mo,val){
@@ -1350,13 +1407,101 @@ function toggleNoMonth(type,id,mo){
   row.noMonth[mo]=!row.noMonth[mo];
   save();renderOverview();
 }
-function delOvRow(type,i){if(!confirm('確定刪除此項目？'))return;D.ovRows[type].splice(i,1);save();renderOverview();}
+function delOvRow(type,id,mo){
+  const row=D.ovRows[type].find(r=>r.id===id);if(!row)return;
+  const choice=prompt('刪除方式：\n\n1 = 只隱藏當月\n2 = 從此月起往後都刪除\n3 = 完全刪除此項目\n\n請輸入 1、2 或 3');
+  if(choice==='1'){
+    if(!row.noMonth)row.noMonth={};
+    row.noMonth[mo]=true;
+  } else if(choice==='2'){
+    row.endMonth=prevMonth(mo);
+    // if endMonth is before startMonth, just remove entirely
+    if(row.startMonth&&row.endMonth<row.startMonth){
+      D.ovRows[type]=D.ovRows[type].filter(r=>r.id!==id);
+    }
+  } else if(choice==='3'){
+    if(!confirm('確定完全刪除「'+row.name+'」？'))return;
+    D.ovRows[type]=D.ovRows[type].filter(r=>r.id!==id);
+  } else return;
+  save();renderOverview();
+}
+
+// ─── Variable Expenses ───────────────────────
+let editVarId=null;
+function varExpEndMonth(v){
+  if(!v.startMonth||!v.months)return null;
+  const d=new Date(v.startMonth+'-01');
+  d.setMonth(d.getMonth()+Number(v.months)-1);
+  return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function isVarExpActive(v,mo){
+  if(!v.startMonth)return false;
+  if(mo<v.startMonth)return false;
+  const end=varExpEndMonth(v);
+  if(end&&mo>end)return false;
+  return true;
+}
+function renderVarExps(mo){
+  const list=document.getElementById('ov-var-list');if(!list)return;
+  if(!D.ovRows.variable)D.ovRows.variable=[];
+  const active=D.ovRows.variable.filter(v=>isVarExpActive(v,mo));
+  list.innerHTML=active.length?active.map(v=>{
+    const end=varExpEndMonth(v);
+    const remaining=end?Math.max(0,(new Date(end+'-01')-new Date(mo+'-01'))/(1000*60*60*24*30.44)|0+1):v.months;
+    const endLabel=end?`到 ${end}`:`共 ${v.months} 月`;
+    return`<div class="ov-row">
+      <span class="ov-label cream" style="flex:1;min-width:0">
+        ${v.name}
+        <span style="font-size:9px;color:var(--muted);margin-left:3px">${endLabel}</span>
+      </span>
+      <span style="font-family:var(--mono);font-size:13px;color:var(--red);width:100px;text-align:right">$${fmt(Number(v.amount||0))}</span>
+      <div class="ov-actions">
+        <button title="編輯" onclick="openVarExpModal('${v.id}')">✏️</button>
+        <button title="刪除" onclick="delVarExp('${v.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join(''):`<div style="font-size:12px;color:var(--muted);padding:6px 0">本月無變動支出</div>`;
+}
+function openVarExpModal(id){
+  editVarId=id||null;
+  if(!D.ovRows.variable)D.ovRows.variable=[];
+  const mo=document.getElementById('ov-month').value;
+  const v=id?D.ovRows.variable.find(x=>x.id===id):null;
+  document.getElementById('var-modal-title').textContent=id?'編輯變動支出':'新增變動支出';
+  document.getElementById('var-name').value=v?v.name:'';
+  document.getElementById('var-amount').value=v?v.amount:'';
+  document.getElementById('var-months').value=v?v.months:1;
+  document.getElementById('var-start').value=v?v.startMonth:mo;
+  document.getElementById('var-note').value=v?v.note||'':'';
+  document.getElementById('var-modal').classList.add('open');
+}
+function saveVarExp(){
+  const name=document.getElementById('var-name').value.trim();if(!name){alert('請輸入名稱');return;}
+  const amount=Number(document.getElementById('var-amount').value)||0;
+  const months=Math.max(1,Number(document.getElementById('var-months').value)||1);
+  const startMonth=document.getElementById('var-start').value;if(!startMonth){alert('請選擇開始月份');return;}
+  const note=document.getElementById('var-note').value.trim();
+  if(!D.ovRows.variable)D.ovRows.variable=[];
+  const entry={id:editVarId||uid(),name,amount,months,startMonth,note};
+  if(editVarId){D.ovRows.variable=D.ovRows.variable.map(x=>x.id===editVarId?entry:x);}
+  else{D.ovRows.variable.push(entry);}
+  save();closeModal('var-modal');renderOverview();
+}
+function delVarExp(id){
+  if(!confirm('確定刪除此變動支出？'))return;
+  if(!D.ovRows.variable)return;
+  D.ovRows.variable=D.ovRows.variable.filter(x=>x.id!==id);
+  save();renderOverview();
+}
 
 function recalcOverview(mo){
-  const incomeTotal=D.ovRows.income.filter(r=>!(r.noMonth&&r.noMonth[mo])).reduce((s,r)=>s+Number(r.amounts&&r.amounts[mo]||0),0);
-  const fixedTotal=D.ovRows.fixed.filter(r=>!(r.noMonth&&r.noMonth[mo])).reduce((s,r)=>s+Number(r.amounts&&r.amounts[mo]||0),0);
+  if(!D.ovRows.variable)D.ovRows.variable=[];
+  const incomeTotal=D.ovRows.income.filter(r=>isRowActiveInMonth(r,mo)&&!(r.noMonth&&r.noMonth[mo])).reduce((s,r)=>s+Number(r.amounts&&r.amounts[mo]||0),0);
+  const fixedTotal=D.ovRows.fixed.filter(r=>isRowActiveInMonth(r,mo)&&!(r.noMonth&&r.noMonth[mo])).reduce((s,r)=>s+Number(r.amounts&&r.amounts[mo]||0),0);
+  const varTotal=D.ovRows.variable.filter(v=>isVarExpActive(v,mo)).reduce((s,v)=>s+Number(v.amount||0),0);
   document.getElementById('ov-total-income').textContent=`NT$ ${fmt(incomeTotal)}`;
   document.getElementById('ov-total-fixed').textContent=`NT$ ${fmt(fixedTotal)}`;
+  document.getElementById('ov-total-var').textContent=`NT$ ${fmt(varTotal)}`;
 
   let totalBill=0,totalPaid=0;
   const cardRows=allCards().map(c=>{
@@ -1383,12 +1528,12 @@ function recalcOverview(mo){
   document.getElementById('ov-total-paid').textContent=`NT$ ${fmt(totalPaid)}`;
   document.getElementById('ov-total-unpaid').textContent=`NT$ ${fmt(totalUnpaid)}`;
 
-  const balance=incomeTotal-fixedTotal-totalBill;
+  const balance=incomeTotal-fixedTotal-varTotal-totalBill;
   const bc=document.getElementById('balance-card');
   bc.className='balance-highlight'+(balance<0?' red':'');
   document.getElementById('balance-val').className='balance-val '+(balance>=0?'balance-pos':'balance-neg');
   document.getElementById('balance-val').textContent=`NT$ ${fmt(balance)}`;
-  document.getElementById('balance-sub').textContent=`收入 ${fmt(incomeTotal)} − 固定 ${fmt(fixedTotal)} − 信用卡 ${fmt(totalBill)}`;
+  document.getElementById('balance-sub').textContent=`收入 ${fmt(incomeTotal)} − 固定 ${fmt(fixedTotal)}${varTotal?` − 變動 ${fmt(varTotal)}`:''} − 信用卡 ${fmt(totalBill)}`;
 
   renderRSU();
   renderOvChart();
@@ -1511,12 +1656,14 @@ function renderOvChart(){
     const d=new Date(now.getFullYear(),now.getMonth()-i,1);
     months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
   }
-  const incomeData=months.map(mo=>D.ovRows.income.filter(r=>!(r.noMonth&&r.noMonth[mo])).reduce((s,r)=>s+Number(r.amounts&&r.amounts[mo]||0),0));
-  const fixedData=months.map(mo=>D.ovRows.fixed.filter(r=>!(r.noMonth&&r.noMonth[mo])).reduce((s,r)=>s+Number(r.amounts&&r.amounts[mo]||0),0));
+  const incomeData=months.map(mo=>D.ovRows.income.filter(r=>isRowActiveInMonth(r,mo)&&!(r.noMonth&&r.noMonth[mo])).reduce((s,r)=>s+Number(r.amounts&&r.amounts[mo]||0),0));
+  const fixedData=months.map(mo=>D.ovRows.fixed.filter(r=>isRowActiveInMonth(r,mo)&&!(r.noMonth&&r.noMonth[mo])).reduce((s,r)=>s+Number(r.amounts&&r.amounts[mo]||0),0));
+  const varData=months.map(mo=>(D.ovRows.variable||[]).filter(v=>isVarExpActive(v,mo)).reduce((s,v)=>s+Number(v.amount||0),0));
   const cardData=months.map(mo=>allCards().reduce((s,c)=>s+getCardBill(c.id,mo),0));
 
   const showIncome=document.getElementById('chart-income')?.checked;
   const showFixed=document.getElementById('chart-fixed')?.checked;
+  const showVar=document.getElementById('chart-var')?.checked;
   const showCard=document.getElementById('chart-card')?.checked;
 
   const ctx=document.getElementById('ov-chart')?.getContext('2d');
@@ -1525,6 +1672,7 @@ function renderOvChart(){
   const datasets=[];
   if(showIncome)datasets.push({label:'收入',data:incomeData,borderColor:'#6EE7B7',backgroundColor:'rgba(110,231,183,.1)',tension:.3,fill:false,pointBackgroundColor:'#6EE7B7'});
   if(showFixed)datasets.push({label:'固定支出',data:fixedData,borderColor:'#FDE68A',backgroundColor:'rgba(253,230,138,.1)',tension:.3,fill:false,pointBackgroundColor:'#FDE68A'});
+  if(showVar)datasets.push({label:'變動支出',data:varData,borderColor:'#FB923C',backgroundColor:'rgba(251,146,60,.1)',tension:.3,fill:false,pointBackgroundColor:'#FB923C'});
   if(showCard)datasets.push({label:'信用卡',data:cardData,borderColor:'#F87171',backgroundColor:'rgba(248,113,113,.1)',tension:.3,fill:false,pointBackgroundColor:'#F87171'});
 
   ovChart=new Chart(ctx,{
@@ -2531,6 +2679,7 @@ Object.assign(window,{
   openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,calcStockTotal,calcTradeAmt,calcDivIncome,renderDividends,setStockListView,
   openSymbolManager,renderSymbolManager,addSymbolInManager,deleteSymbol,moveSymbol,onTickerInput,onNameInput,
   addOvRow,renderOverview,setOvAmt,toggleOvConf,toggleNoMonth,delOvRow,recalcOverview,renderOvChart,
+  openVarExpModal,saveVarExp,delVarExp,renderVarExps,isRowActiveInMonth,isVarExpActive,
   openRSUModal,openRSUEdit,saveRSU,delRSU,delRSUFuture,
   openDebtModal,editDebt,delDebt,setDebtDir,saveDebt,
   openPersonManager,renderPersonManager,addPerson,
