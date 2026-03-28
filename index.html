@@ -828,17 +828,18 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 </div>
 
-<!-- ══ Card Pay Modal ══ -->
-<div class="modal-overlay" id="card-pay-modal">
+<!-- ══ Bank Pay Modal ══ -->
+<div class="modal-overlay" id="bank-pay-modal">
   <div class="modal-box">
-    <div class="modal-header"><span id="cpay-title">繳款紀錄</span><button class="close-btn" onclick="closeModal('card-pay-modal')">✕</button></div>
+    <div class="modal-header"><span id="bpay-title">繳款紀錄</span><button class="close-btn" onclick="closeModal('bank-pay-modal')">✕</button></div>
     <div class="modal-body">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">帳單金額：<span id="cpay-bill" style="color:var(--red);font-weight:700"></span></div>
-      <input type="hidden" id="cpay-cid"><input type="hidden" id="cpay-mo">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">本月應繳總額：<span id="bpay-bill" style="color:var(--red);font-weight:700"></span></div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">（含本月消費 + 結轉 + 利息）</div>
+      <input type="hidden" id="bpay-bid"><input type="hidden" id="bpay-mo">
       <div class="form-grid">
-        <label>已繳金額</label><input type="number" id="cpay-paid" placeholder="0">
-        <label style="color:var(--orange)">💸 利息</label><input type="number" id="cpay-interest" placeholder="0（若有循環利息請填入）" style="border-color:var(--orange)">
-        <div class="form-actions"><button class="btn btn-secondary" onclick="closeModal('card-pay-modal')">取消</button><button class="btn btn-primary" onclick="saveCardPay()">儲存</button></div>
+        <label>已繳金額</label><input type="number" id="bpay-paid" placeholder="0">
+        <label style="color:var(--orange)">💸 循環利息</label><input type="number" id="bpay-interest" placeholder="0（若有循環利息請填入）" style="border-color:var(--orange)">
+        <div class="form-actions"><button class="btn btn-secondary" onclick="closeModal('bank-pay-modal')">取消</button><button class="btn btn-primary" onclick="saveBankPay()">儲存</button></div>
       </div>
     </div>
   </div>
@@ -1162,6 +1163,33 @@ function runMigrate(){
     if(!D.payments)D.payments={};
     if(!D.bills)D.bills={};
     if(!D.banks)D.banks=[];
+    // 遷移：將舊的卡片級繳款＋利息合併到銀行級
+    if(!D.bankPayments){
+      D.bankPayments={};
+      if(D.payments){
+        Object.entries(D.payments).forEach(([key,val])=>{
+          const us=key.lastIndexOf('_');
+          const cid=key.slice(0,us),mo=key.slice(us+1);
+          const bank=D.banks.find(b=>b.cards&&b.cards.some(c=>c.id===cid));
+          if(!bank)return;
+          const bk=bank.id+'_'+mo;
+          if(!D.bankPayments[bk])D.bankPayments[bk]={amount:0,interest:0,confirmed:false};
+          D.bankPayments[bk].amount+=Number(val.amount||0);
+          if(val.confirmed)D.bankPayments[bk].confirmed=true;
+        });
+      }
+      if(D.cardInterest){
+        Object.entries(D.cardInterest).forEach(([key,interest])=>{
+          const us=key.lastIndexOf('_');
+          const cid=key.slice(0,us),mo=key.slice(us+1);
+          const bank=D.banks.find(b=>b.cards&&b.cards.some(c=>c.id===cid));
+          if(!bank)return;
+          const bk=bank.id+'_'+mo;
+          if(!D.bankPayments[bk])D.bankPayments[bk]={amount:0,interest:0,confirmed:false};
+          D.bankPayments[bk].interest+=Number(interest||0);
+        });
+      }
+    }
     if(!D.cardOwners)D.cardOwners=['孟青','景翔'];
     if(!D.deposits)D.deposits=[];
     if(!D.gold)D.gold={buys:[],sells:[],currentPrice:0};
@@ -1274,11 +1302,33 @@ function getPaid(cid,mo){return Number((D.payments[cid+'_'+mo]||{}).amount||0)}
 function isPaidConfirmed(cid,mo){return !!(D.payments[cid+'_'+mo]||{}).confirmed}
 function isBillConfirmed(cid,mo){return !!(D.bills[cid+'_'+mo]||{}).confirmed}
 
+// ── 銀行級繳款 helpers ──
+function getBankPaid(bid,mo){return Number(((D.bankPayments||{})[bid+'_'+mo]||{}).amount||0);}
+function getBankInterest(bid,mo){return Number(((D.bankPayments||{})[bid+'_'+mo]||{}).interest||0);}
+function isBankPaidConfirmed(bid,mo){return !!((D.bankPayments||{})[bid+'_'+mo]||{}).confirmed;}
+function getBankTotalBill(bid,mo){
+  const b=D.banks.find(b=>b.id===bid);
+  if(!b)return 0;
+  return b.cards.reduce((s,c)=>s+getCardBill(c.id,mo),0);
+}
+function getBankCarry(bid,mo,depth){
+  if((depth||0)>24)return 0;
+  const prev=prevMonth(mo);
+  const prevBill=getBankTotalBill(bid,prev);
+  const prevPaid=getBankPaid(bid,prev);
+  const prevCarry=getBankCarry(bid,prev,(depth||0)+1);
+  const prevInterest=getBankInterest(bid,prev);
+  return Math.max(0,prevBill+prevCarry+prevInterest-prevPaid);
+}
+
 function renderCC(){
   const mo=document.getElementById('filter-month').value;
-  // Summary bar（含上期結轉）
+  // Summary bar（銀行級合計）
   let tBill=0,tPaid=0;
-  allCards().forEach(c=>{tBill+=getCardBill(c.id,mo)+getCarryForward(c.id,mo);tPaid+=getPaid(c.id,mo);});
+  D.banks.forEach(b=>{
+    tBill+=getBankTotalBill(b.id,mo)+getBankCarry(b.id,mo)+getBankInterest(b.id,mo);
+    tPaid+=getBankPaid(b.id,mo);
+  });
   const tUnpaid=tBill-tPaid;
   document.getElementById('cc-summary').innerHTML=`
     <div class="sum-box"><div class="sum-box-label">本月總帳單</div><div class="sum-box-val neg">$${fmt(tBill)}</div></div>
@@ -1288,53 +1338,43 @@ function renderCC(){
   // Banks
   let bankHTML='';
   D.banks.forEach(b=>{
-    let bankBill=0;
+    // ── 銀行級計算 ──
+    const bankBill=getBankTotalBill(b.id,mo);
+    const bankCarry=getBankCarry(b.id,mo);
+    const bankInterest=getBankInterest(b.id,mo);
+    const bankPaid=getBankPaid(b.id,mo);
+    const bankUnpaid=bankBill+bankCarry+bankInterest-bankPaid;
+    const bankDisplayTotal=bankBill+bankCarry+bankInterest;
+    const bankPaidConf=isBankPaidConfirmed(b.id,mo);
+
+    // ── 各卡明細（每卡只顯示帳單金額） ──
     let cardRowsHTML=b.cards.map(c=>{
       const bill=getCardBill(c.id,mo);
-      const carry=getCarryForward(c.id,mo);
-      const interest=getCardInterest(c.id,mo);
-      const paid=getPaid(c.id,mo);
-      const unpaid=bill+carry+interest-paid;
-      bankBill+=bill+carry+interest;
-      const billConf=isBillConfirmed(c.id,mo);
-      const paidConf=isPaidConfirmed(c.id,mo);
-      // 該卡本月消費明細（非分期：依帳單月；分期：依哪期落在本月）
+      // 該卡本月消費明細
       const cardExps=D.expenses.filter(e=>{
         if(e.cardId!==c.id)return false;
         if(e.isInstallment)return isInstActiveInMonth(e,mo);
         return getExpBillingMonth(e)===mo;
       }).sort((a,b)=>a.date.localeCompare(b.date));
-      const carryHtml=carry>0?`<div class="card-exp-item" style="background:#2d1a0e;border-left:2px solid var(--yellow)">
-              <span class="card-exp-date" style="color:var(--yellow)">結轉</span>
-              <span class="card-exp-name" style="color:var(--yellow)">${prevMonth(mo)} 未繳結轉</span>
-              <span class="card-exp-amt" style="color:var(--yellow)">+$${fmt(carry)}</span>
-            </div>`:'';
-      const interestHtml=interest>0?`<div class="card-exp-item" style="background:#2d1a17;border-left:2px solid var(--orange)">
-              <span class="card-exp-date" style="color:var(--orange)">利息</span>
-              <span class="card-exp-name" style="color:var(--orange)">循環利息</span>
-              <span class="card-exp-amt" style="color:var(--orange)">+$${fmt(interest)}</span>
-            </div>`:'';
-      const cardExpHTML=(carry>0||interest>0||cardExps.length)
-        ?(carryHtml+interestHtml+(cardExps.length?cardExps.map(e=>{
-            let dispAmt,dispName;
-            if(e.isInstallment){
-              const idx=monthDiff(getExpBillingMonth(e),mo);
-              const n=e.installments.length;
-              dispAmt=getInstAmtForMonth(e,mo);
-              dispName=`${e.name} <span style="font-size:10px;color:var(--accent2)">第${idx+1}/${n}期</span>`;
-            }else{
-              dispAmt=Number(e.amount||0);
-              dispName=`${e.name}`;
-            }
-            return`<div class="card-exp-item">
-              <span class="card-exp-date">${e.date}</span>
-              <span class="card-exp-name">${dispName}${e.category?` <span class="cat-badge">${e.category}</span>`:''}</span>
-              <span class="card-exp-amt">$${fmt(dispAmt)}</span>
-              <button onclick="editExpense('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:0 2px">✏</button>
-              <button onclick="delExpense('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--red);padding:0 2px">🗑</button>
-            </div>`;
-          }).join(''):''))
-        :'';
+      const cardExpHTML=cardExps.length?cardExps.map(e=>{
+          let dispAmt,dispName;
+          if(e.isInstallment){
+            const idx=monthDiff(getExpBillingMonth(e),mo);
+            const n=e.installments.length;
+            dispAmt=getInstAmtForMonth(e,mo);
+            dispName=`${e.name} <span style="font-size:10px;color:var(--accent2)">第${idx+1}/${n}期</span>`;
+          }else{
+            dispAmt=Number(e.amount||0);
+            dispName=`${e.name}`;
+          }
+          return`<div class="card-exp-item">
+            <span class="card-exp-date">${e.date}</span>
+            <span class="card-exp-name">${dispName}${e.category?` <span class="cat-badge">${e.category}</span>`:''}</span>
+            <span class="card-exp-amt">$${fmt(dispAmt)}</span>
+            <button onclick="editExpense('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:0 2px">✏</button>
+            <button onclick="delExpense('${e.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--red);padding:0 2px">🗑</button>
+          </div>`;
+        }).join(''):'';
       return`<div>
         <div class="card-row">
           <div class="card-dot" style="background:${b.color}"></div>
@@ -1343,26 +1383,34 @@ function renderCC(){
             <div class="card-last4"><span style="color:var(--accent2)">${c.owner||''}</span>${c.owner?' · ':''}<span style="color:var(--muted)">${b.name}</span>${c.last4?' · '+c.last4:''}</div>
           </div>
           <div class="card-amounts">
-            <span class="card-bill-val ${billConf?'confirmed':''}" title="點擊切換確認（含結轉+利息）" onclick="toggleBillConfirm('${c.id}','${mo}')">帳$${fmt(bill+carry+interest)}</span>
-            <span class="slash">/</span>
-            <span class="card-paid-val ${paidConf?'confirmed':''}" title="點擊切換已繳確認" onclick="togglePaidConfirm('${c.id}','${mo}',event)">繳$${fmt(paid)}</span>
-            ${unpaid>0?`<span class="slash">/</span><span class="card-unpaid-val">欠$${fmt(unpaid)}</span>`:''}
+            <span class="card-bill-val">帳$${fmt(bill)}</span>
           </div>
           <div class="card-row-btns">
             <button onclick="openMultiExp('${c.id}')" title="新增消費" style="background:none;border:none;cursor:pointer;font-size:15px;color:var(--accent);padding:2px 3px;line-height:1">＋</button>
             <button onclick="openOcrModal('${c.id}')" title="截圖匯入" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--muted);padding:2px 3px;line-height:1">📷</button>
-            <button class="card-edit-btn" onclick="openCardPayModal('${c.id}','${mo}')">✏</button>
           </div>
         </div>
         ${cardExpHTML}
       </div>`;
     }).join('');
+
+    // ── 銀行 header：含結轉/利息/繳款/欠款 ──
+    const carryTag=bankCarry>0?`<span style="font-size:10px;color:var(--yellow)">結$${fmt(bankCarry)}</span><span class="slash">/</span>`:'';
+    const intTag=bankInterest>0?`<span style="font-size:10px;color:var(--orange)">息$${fmt(bankInterest)}</span><span class="slash">/</span>`:'';
+    const paidTag=`<span style="font-size:11px;${bankPaidConf?'text-decoration:line-through;color:var(--muted)':'color:var(--accent2)'}">繳$${fmt(bankPaid)}</span>`;
+    const unpaidTag=bankUnpaid>0
+      ?`<span class="slash">/</span><span style="font-size:11px;color:var(--red);font-weight:700">欠$${fmt(bankUnpaid)}</span>`
+      :(bankPaid>0?`<span class="slash">/</span><span style="font-size:10px;color:var(--accent)">✓已繳清</span>`:'');
     bankHTML+=`<div class="bank-block">
-      <div class="bank-header" onclick="toggleBank('${b.id}')">
-        <div class="bank-dot" style="background:${b.color}"></div>
-        <div class="bank-name">${b.name}</div>
-        <div class="bank-total neg">$${fmt(bankBill)}</div>
-        <span style="color:var(--muted);margin-left:4px" id="bank-toggle-${b.id}">▾</span>
+      <div class="bank-header">
+        <div class="bank-dot" style="background:${b.color}" onclick="toggleBank('${b.id}')"></div>
+        <div class="bank-name" onclick="toggleBank('${b.id}')" style="cursor:pointer">${b.name}</div>
+        <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;flex-wrap:nowrap">
+          ${carryTag}${intTag}${paidTag}${unpaidTag}
+          <button onclick="event.stopPropagation();openBankPayModal('${b.id}','${mo}')" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);padding:1px 3px;line-height:1;margin-left:2px">✏</button>
+        </div>
+        <div class="bank-total neg" onclick="toggleBank('${b.id}')" style="cursor:pointer">$${fmt(bankDisplayTotal)}</div>
+        <span style="color:var(--muted);margin-left:4px;cursor:pointer" id="bank-toggle-${b.id}" onclick="toggleBank('${b.id}')">▾</span>
       </div>
       <div class="bank-body" id="bank-body-${b.id}">${cardRowsHTML}</div>
     </div>`;
@@ -1445,35 +1493,40 @@ function togglePaidConfirm(cid,mo,ev){
   save();renderCC();
 }
 
-// Card pay modal (inline edit paid amount + interest)
+// Bank pay modal（銀行級繳款）
 function getCardInterest(cid,mo){return Number((D.cardInterest||{})[cid+'_'+mo]||0);}
+function openBankPayModal(bid,mo){
+  const bank=D.banks.find(b=>b.id===bid);
+  const bill=getBankTotalBill(bid,mo);
+  const carry=getBankCarry(bid,mo);
+  const interest=getBankInterest(bid,mo);
+  const paid=getBankPaid(bid,mo);
+  const total=bill+carry+interest;
+  document.getElementById('bpay-title').textContent=(bank?.name||'')+'  繳款紀錄';
+  document.getElementById('bpay-bill').textContent='NT$ '+fmt(total)
+    +(carry>0?'（含結轉 '+fmt(carry)+'）':'');
+  document.getElementById('bpay-bid').value=bid;
+  document.getElementById('bpay-mo').value=mo;
+  document.getElementById('bpay-paid').value=paid||'';
+  document.getElementById('bpay-interest').value=interest||'';
+  document.getElementById('bank-pay-modal').classList.add('open');
+}
+function saveBankPay(){
+  const bid=document.getElementById('bpay-bid').value;
+  const mo=document.getElementById('bpay-mo').value;
+  const paid=Number(document.getElementById('bpay-paid').value)||0;
+  const interest=Number(document.getElementById('bpay-interest').value)||0;
+  if(!D.bankPayments)D.bankPayments={};
+  const conf=isBankPaidConfirmed(bid,mo);
+  D.bankPayments[bid+'_'+mo]={amount:paid,interest,confirmed:conf};
+  save();closeModal('bank-pay-modal');renderCC();
+}
+// 向後相容（舊資料用）
 function openCardPayModal(cid,mo){
-  const card=findCard(cid);
-  const bill=getCardBill(cid,mo);
-  const carry=getCarryForward(cid,mo);
-  const paid=getPaid(cid,mo);
-  const interest=getCardInterest(cid,mo);
-  document.getElementById('cpay-title').textContent=`${card?.owner?card.owner+' · ':''}${card?.name||''}${card?.last4?' ('+card.last4+')':''}`;
-  document.getElementById('cpay-bill').textContent='NT$ '+fmt(bill)+(carry>0?' (+結轉 '+fmt(carry)+')':'')+(interest>0?' (+息 '+fmt(interest)+')':'');
-  document.getElementById('cpay-cid').value=cid;
-  document.getElementById('cpay-mo').value=mo;
-  document.getElementById('cpay-paid').value=paid||'';
-  document.getElementById('cpay-interest').value=interest||'';
-  document.getElementById('card-pay-modal').classList.add('open');
+  const bank=D.banks.find(b=>b.cards&&b.cards.some(c=>c.id===cid));
+  if(bank)openBankPayModal(bank.id,mo);
 }
-function saveCardPay(){
-  const cid=document.getElementById('cpay-cid').value;
-  const mo=document.getElementById('cpay-mo').value;
-  const paid=Number(document.getElementById('cpay-paid').value)||0;
-  const interest=Number(document.getElementById('cpay-interest').value)||0;
-  if(!D.payments)D.payments={};
-  if(!D.cardInterest)D.cardInterest={};
-  const paidConf=isPaidConfirmed(cid,mo);
-  if(!D.payments[cid+'_'+mo])D.payments[cid+'_'+mo]={amount:0,confirmed:paidConf};
-  D.payments[cid+'_'+mo].amount=paid;
-  D.cardInterest[cid+'_'+mo]=interest;
-  save();closeModal('card-pay-modal');renderCC();
-}
+function saveCardPay(){saveBankPay();}
 
 // ═══════════════════════════════════════════════
 //  OCR IMPORT
@@ -3342,7 +3395,7 @@ Object.assign(window,{
   toggleInst,buildInstFields,saveExpense,autoCalcInst,
   openOcrModal,handleOcrDrop,handleOcrFile,importOcrItems,
   openBankManager,renderBankManager,addBankInManager,saveBankManager,setupDefaultCards,
-  getExpBillingMonth,handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,saveCardPay,getCardInterest,renderAnnualInterest,
+  getExpBillingMonth,handleOwnerSelect,toggleBillConfirm,togglePaidConfirm,openCardPayModal,saveCardPay,getCardInterest,renderAnnualInterest,openBankPayModal,saveBankPay,
   openStockModal,editStock,delStock,setStockType,saveStock,addStockTradeType,buildStockTradeTypeSelect,calcStockTotal,calcTradeAmt,calcDivIncome,renderDividends,setStockListView,
   openSymbolManager,renderSymbolManager,addSymbolInManager,deleteSymbol,moveSymbol,onTickerInput,onNameInput,
   addOvRow,renderOverview,setOvAmt,toggleOvConf,toggleNoMonth,delOvRow,recalcOverview,renderOvChart,
