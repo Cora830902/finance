@@ -184,6 +184,23 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
 .inv-shares{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text)}
 .inv-cost{font-size:11px;color:var(--muted);margin-top:2px}
 
+/* ─ Deposit ─ */
+.dep-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+.dep-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.dep-bank{font-size:14px;font-weight:700;color:var(--text)}
+.dep-type-tag{font-size:10px;padding:2px 8px;border-radius:20px;background:#1d4070;color:#60a5fa;font-weight:600}
+.dep-type-tag.matured{background:#2d1f0e;color:var(--yellow)}
+.dep-type-tag.withdrawn{background:var(--bg3);color:var(--muted)}
+.dep-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:12px}
+.dep-label{color:var(--muted)}
+.dep-val{font-family:var(--mono);font-weight:600;color:var(--text)}
+.dep-progress-wrap{margin:10px 0 6px;background:var(--bg3);border-radius:6px;height:6px;overflow:hidden}
+.dep-progress-bar{height:100%;border-radius:6px;background:linear-gradient(90deg,#3b82f6,#6EE7B7);transition:width .3s}
+.dep-progress-bar.matured{background:var(--yellow)}
+.dep-days{font-size:10px;color:var(--muted);text-align:right;margin-bottom:8px}
+.dep-interest-box{background:var(--bg3);border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center}
+.dep-actions{display:flex;gap:6px;margin-top:8px}
+
 /* ─ Backup ─ */
 .snapshot-item{background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .snapshot-time{font-size:11px;color:var(--muted);flex:1}
@@ -215,7 +232,8 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     <button class="tab-btn" onclick="switchTab(2)">📈 股票</button>
     <button class="tab-btn" onclick="switchTab(3)">🤝 借貸</button>
     <button class="tab-btn" onclick="switchTab(4)">🥇 黃金</button>
-    <button class="tab-btn" onclick="switchTab(5)">🔒 備份</button>
+    <button class="tab-btn" onclick="switchTab(5)">🏦 定存</button>
+    <button class="tab-btn" onclick="switchTab(6)">🔒 備份</button>
   </div>
 
   <!-- ══ 信用卡 ══ -->
@@ -443,8 +461,32 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     <div class="expense-list" id="gold-sell-list"></div>
   </div>
 
-  <!-- ══ 備份與還原 ══ -->
+  <!-- ══ 定存 ══ -->
   <div class="tab-content" id="tab-5">
+    <div class="filter-bar"><button class="btn-icon" onclick="openDepositModal()">＋ 新增定存</button></div>
+
+    <!-- 摘要 -->
+    <div id="deposit-summary-box" style="display:none;background:#0e2240;border:1px solid #1d4070;border-radius:12px;padding:12px 14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:10px;color:var(--muted)">總本金</span>
+        <span id="dep-total-principal" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--yellow)">NT$ 0</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:10px;color:var(--muted)">預計總利息（稅前）</span>
+        <span id="dep-total-interest" style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent)">NT$ 0</span>
+      </div>
+      <div style="border-top:1px solid #1d4070;padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;color:var(--muted)">最近到期</span>
+        <span id="dep-next-maturity" style="font-size:12px;font-weight:700;color:var(--text)">—</span>
+      </div>
+    </div>
+
+    <!-- 定存列表 -->
+    <div id="deposit-list"><div class="empty" style="padding:40px 0">尚無定存記錄<br><span style="font-size:11px;color:var(--muted)">點右上角「＋ 新增定存」開始記錄</span></div></div>
+  </div>
+
+  <!-- ══ 備份與還原 ══ -->
+  <div class="tab-content" id="tab-6">
     <!-- 資料狀態 -->
     <div class="section-card">
       <div class="section-title">📊 目前資料狀態</div>
@@ -689,6 +731,46 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
   </div>
 </div>
 
+<!-- ══ 定存 Modal ══ -->
+<div class="modal-overlay" id="deposit-modal">
+  <div class="modal-box">
+    <div class="modal-header"><span id="deposit-modal-title">新增定存</span><button class="close-btn" onclick="closeModal('deposit-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label>銀行</label><input type="text" id="dep-bank" placeholder="例：台灣銀行、郵局">
+        <label>備註</label><input type="text" id="dep-note" placeholder="選填（帳戶別名等）">
+        <label>存款類型</label>
+        <select id="dep-type">
+          <option value="整存整付">整存整付（到期領本利，月複利）</option>
+          <option value="存本取息">存本取息（每月領息，到期領本）</option>
+          <option value="定期存款">定期存款（到期領本利，單利）</option>
+          <option value="零存整付">零存整付（每月存錢，到期領本利）</option>
+        </select>
+        <label>本金</label><input type="number" id="dep-principal" placeholder="0" oninput="calcDepInterest()">
+        <label>年利率 (%)</label><input type="number" id="dep-rate" placeholder="1.70" step="0.001" oninput="calcDepInterest()">
+        <label>利率類型</label>
+        <select id="dep-rate-type"><option value="固定">固定利率</option><option value="機動">機動利率</option></select>
+        <label>存期</label>
+        <select id="dep-term" onchange="calcDepInterest()">
+          <option value="1">1 個月</option>
+          <option value="2">2 個月</option>
+          <option value="3">3 個月</option>
+          <option value="6">6 個月</option>
+          <option value="12" selected>12 個月（1年）</option>
+          <option value="24">24 個月（2年）</option>
+          <option value="36">36 個月（3年）</option>
+        </select>
+        <label>起息日</label><input type="date" id="dep-start" oninput="calcDepInterest()">
+        <label>預估到期日</label><input type="text" id="dep-maturity" readonly style="background:var(--bg3);color:var(--muted)">
+        <label>預計利息</label><input type="text" id="dep-est-interest" readonly style="background:var(--bg3);color:var(--accent);font-weight:700">
+        <label>自動續存</label>
+        <select id="dep-autorenew"><option value="no">否</option><option value="yes">是</option></select>
+        <div class="form-actions"><button class="btn btn-secondary" onclick="closeModal('deposit-modal')">取消</button><button class="btn btn-primary" onclick="saveDeposit()">儲存</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ RSU Modal ══ -->
 <div class="modal-overlay" id="rsu-modal">
   <div class="modal-box">
@@ -817,6 +899,7 @@ function runMigrate(){
     if(!D.bills)D.bills={};
     if(!D.banks)D.banks=[];
     if(!D.cardOwners)D.cardOwners=['孟青','景翔'];
+    if(!D.deposits)D.deposits=[];
   }catch(e){console.warn('migrate error',e)}
 }
 
@@ -830,7 +913,7 @@ function initApp(){
   document.getElementById('gold-date').value=now.slice(0,10);
   document.getElementById('gold-price-input').value=D.gold.currentPrice||'';
   rebuildExpCardSelect();
-  try{const t=parseInt(localStorage.getItem('lastTab'));if(t>=0&&t<=5)switchTab(t);else renderCC();}
+  try{const t=parseInt(localStorage.getItem('lastTab'));if(t>=0&&t<=6)switchTab(t);else renderCC();}
   catch(e){renderCC();}
 }
 
@@ -857,7 +940,8 @@ function switchTab(i){
   if(i===2)renderStocks();
   if(i===3)renderDebt();
   if(i===4)renderGold();
-  if(i===5)renderBackup();
+  if(i===5)renderDeposits();
+  if(i===6)renderBackup();
 }
 
 // ═══════════════════════════════════════════════
@@ -2029,6 +2113,179 @@ function delGold(type,id){
 }
 
 // ═══════════════════════════════════════════════
+//  定存 DEPOSIT
+// ═══════════════════════════════════════════════
+let editDepositId=null;
+
+function addMonths(dateStr,months){
+  const d=new Date(dateStr);
+  d.setMonth(d.getMonth()+months);
+  return d.toISOString().slice(0,10);
+}
+
+function calcDepositInterest(dep){
+  const p=Number(dep.principal)||0;
+  const r=Number(dep.rate)||0;
+  const n=Number(dep.term)||0;
+  if(!p||!r||!n)return 0;
+  if(dep.type==='整存整付'||dep.type==='零存整付'){
+    // 月複利：A = P×(1+r/1200)^n
+    return Math.round(p*Math.pow(1+r/1200,n)-p);
+  }else{
+    // 單利：I = P × r/100 × n/12
+    return Math.round(p*(r/100)*(n/12));
+  }
+}
+
+function calcDepInterest(){
+  const p=Number(document.getElementById('dep-principal').value)||0;
+  const r=Number(document.getElementById('dep-rate').value)||0;
+  const n=Number(document.getElementById('dep-term').value)||0;
+  const type=document.getElementById('dep-type').value;
+  const start=document.getElementById('dep-start').value;
+  // 到期日
+  if(start&&n){
+    document.getElementById('dep-maturity').value=addMonths(start,n);
+  }
+  // 預計利息
+  let interest=0;
+  if(p&&r&&n){
+    if(type==='整存整付'||type==='零存整付'){
+      interest=Math.round(p*Math.pow(1+r/1200,n)-p);
+    }else{
+      interest=Math.round(p*(r/100)*(n/12));
+    }
+    document.getElementById('dep-est-interest').value=`NT$ ${fmt(interest)}`;
+  }else{
+    document.getElementById('dep-est-interest').value='';
+  }
+}
+
+function openDepositModal(id){
+  editDepositId=id||null;
+  const dep=id?D.deposits.find(d=>d.id===id):null;
+  document.getElementById('deposit-modal-title').textContent=dep?'編輯定存':'新增定存';
+  document.getElementById('dep-bank').value=dep?dep.bank:'';
+  document.getElementById('dep-note').value=dep?dep.note:'';
+  document.getElementById('dep-type').value=dep?dep.type:'整存整付';
+  document.getElementById('dep-principal').value=dep?dep.principal:'';
+  document.getElementById('dep-rate').value=dep?dep.rate:'';
+  document.getElementById('dep-rate-type').value=dep?dep.rateType:'固定';
+  document.getElementById('dep-term').value=dep?String(dep.term):'12';
+  document.getElementById('dep-start').value=dep?dep.startDate:new Date().toISOString().slice(0,10);
+  document.getElementById('dep-autorenew').value=dep?dep.autoRenew:'no';
+  calcDepInterest();
+  document.getElementById('deposit-modal').classList.add('open');
+}
+
+function saveDeposit(){
+  const dep={
+    id:editDepositId||uid(),
+    bank:document.getElementById('dep-bank').value||'未命名',
+    note:document.getElementById('dep-note').value,
+    type:document.getElementById('dep-type').value,
+    principal:Number(document.getElementById('dep-principal').value)||0,
+    rate:Number(document.getElementById('dep-rate').value)||0,
+    rateType:document.getElementById('dep-rate-type').value,
+    term:Number(document.getElementById('dep-term').value)||12,
+    startDate:document.getElementById('dep-start').value,
+    autoRenew:document.getElementById('dep-autorenew').value,
+    status:'active'
+  };
+  if(!dep.bank||!dep.principal||!dep.startDate){alert('請填寫銀行、本金及起息日');return;}
+  D.deposits=editDepositId
+    ?D.deposits.map(d=>d.id===editDepositId?dep:d)
+    :[...D.deposits,dep];
+  save();closeModal('deposit-modal');renderDeposits();
+}
+
+function delDeposit(id){
+  if(!confirm('確定刪除此定存記錄？'))return;
+  D.deposits=D.deposits.filter(d=>d.id!==id);
+  save();renderDeposits();
+}
+
+function markDepositWithdrawn(id){
+  D.deposits=D.deposits.map(d=>d.id===id?{...d,status:'withdrawn'}:d);
+  save();renderDeposits();
+}
+
+function renderDeposits(){
+  if(!D.deposits||!D.deposits.length){
+    document.getElementById('deposit-summary-box').style.display='none';
+    document.getElementById('deposit-list').innerHTML='<div class="empty" style="padding:40px 0">尚無定存記錄<br><span style="font-size:11px;color:var(--muted)">點右上角「＋ 新增定存」開始記錄</span></div>';
+    return;
+  }
+  const today=new Date();today.setHours(0,0,0,0);
+  const active=D.deposits.filter(d=>d.status!=='withdrawn');
+  const totalPrincipal=active.reduce((s,d)=>s+Number(d.principal||0),0);
+  const totalInterest=active.reduce((s,d)=>s+calcDepositInterest(d),0);
+  // 最近到期
+  const upcoming=active
+    .map(d=>({...d,matDate:new Date(addMonths(d.startDate,d.term))}))
+    .filter(d=>d.matDate>=today)
+    .sort((a,b)=>a.matDate-b.matDate);
+  const nextMaturity=upcoming.length?upcoming[0].matDate.toISOString().slice(0,10):'—';
+  // 更新摘要
+  document.getElementById('deposit-summary-box').style.display='block';
+  document.getElementById('dep-total-principal').textContent=`NT$ ${fmt(totalPrincipal)}`;
+  document.getElementById('dep-total-interest').textContent=`NT$ ${fmt(totalInterest)}`;
+  document.getElementById('dep-next-maturity').textContent=nextMaturity!=='—'?nextMaturity:'無即將到期';
+  // 渲染卡片
+  const sorted=[...D.deposits].sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  document.getElementById('deposit-list').innerHTML=sorted.map(dep=>{
+    const matDate=new Date(addMonths(dep.startDate,dep.term));
+    const startDate=new Date(dep.startDate);
+    const matStr=matDate.toISOString().slice(0,10);
+    const isMatured=matDate<today;
+    const isWithdrawn=dep.status==='withdrawn';
+    const interest=calcDepositInterest(dep);
+    // 進度條
+    const totalMs=matDate-startDate;
+    const elapsedMs=Math.min(today-startDate,totalMs);
+    const pct=Math.max(0,Math.min(100,Math.round(elapsedMs/totalMs*100)));
+    // 剩餘天數
+    const daysLeft=Math.round((matDate-today)/(1000*60*60*24));
+    let statusLabel='';
+    let tagClass='dep-type-tag';
+    if(isWithdrawn){statusLabel='已領回';tagClass='dep-type-tag withdrawn';}
+    else if(isMatured){statusLabel='已到期';tagClass='dep-type-tag matured';}
+    else{statusLabel=dep.type;tagClass='dep-type-tag';}
+    let daysStr='';
+    if(!isWithdrawn){
+      if(isMatured)daysStr=`<span style="color:var(--yellow)">已到期 ${Math.abs(daysLeft)} 天</span>`;
+      else if(daysLeft<=30)daysStr=`<span style="color:var(--red)">⚠️ 剩 ${daysLeft} 天到期</span>`;
+      else daysStr=`剩 ${daysLeft} 天到期（${matStr}）`;
+    }
+    // 月利息（存本取息）
+    const monthlyInt=dep.type==='存本取息'?Math.round(Number(dep.principal)*(Number(dep.rate)/100)/12):0;
+    return`<div class="dep-card">
+      <div class="dep-card-header">
+        <div>
+          <div class="dep-bank">${dep.bank}${dep.note?` <span style="font-size:11px;color:var(--muted);font-weight:400">· ${dep.note}</span>`:''}${dep.autoRenew==='yes'?' <span style="font-size:10px;color:#60a5fa">🔁自動續存</span>':''}</div>
+          <div style="margin-top:3px;font-size:11px;color:var(--muted)">${dep.rateType}利率 · 起息 ${dep.startDate}</div>
+        </div>
+        <span class="${tagClass}">${statusLabel}</span>
+      </div>
+      <div class="dep-row"><span class="dep-label">本金</span><span class="dep-val" style="color:var(--yellow)">NT$ ${fmt(dep.principal)}</span></div>
+      <div class="dep-row"><span class="dep-label">年利率</span><span class="dep-val">${dep.rate}%</span></div>
+      <div class="dep-row"><span class="dep-label">存期</span><span class="dep-val">${dep.term} 個月</span></div>
+      ${!isWithdrawn?`<div class="dep-progress-wrap"><div class="${isMatured?'dep-progress-bar matured':'dep-progress-bar'}" style="width:${pct}%"></div></div><div class="dep-days">${daysStr}</div>`:''}
+      <div class="dep-interest-box">
+        <span style="font-size:11px;color:var(--muted)">${dep.type==='存本取息'?'每月利息':'預計到期利息'}</span>
+        <span style="font-family:var(--mono);font-weight:700;color:var(--accent)">NT$ ${fmt(dep.type==='存本取息'?monthlyInt:interest)}</span>
+      </div>
+      ${dep.type==='存本取息'?`<div style="text-align:right;font-size:10px;color:var(--muted);margin-top:4px">到期總利息 NT$ ${fmt(interest)}</div>`:''}
+      <div class="dep-actions">
+        <button class="btn btn-secondary" style="flex:1;font-size:11px" onclick="openDepositModal('${dep.id}')">✏️ 編輯</button>
+        ${!isWithdrawn&&isMatured?`<button class="btn" style="flex:1;font-size:11px;background:#2d1f0e;color:var(--yellow);border:1px solid #5c3d0e" onclick="markDepositWithdrawn('${dep.id}')">✅ 標記已領回</button>`:''}
+        <button class="btn" style="font-size:11px;background:#2d0e0e;color:var(--red);border:1px solid #5c1a1a;padding:6px 10px" onclick="delDeposit('${dep.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
 //  BACKUP & RESTORE (Firebase version)
 // ═══════════════════════════════════════════════
 function renderBackup(){
@@ -2036,9 +2293,10 @@ function renderBackup(){
   const stockCount=D.stocks.length;
   const debtCount=D.debts.length;
   const goldCount=(D.gold.buys||[]).length+(D.gold.sells||[]).length;
+  const depCount=(D.deposits||[]).length;
   document.getElementById('backup-stats').innerHTML=`
     💳 消費記錄：<b>${expCount}</b> 筆　📈 股票：<b>${stockCount}</b> 筆<br>
-    🤝 借貸：<b>${debtCount}</b> 筆　🥇 黃金：<b>${goldCount}</b> 筆<br>
+    🤝 借貸：<b>${debtCount}</b> 筆　🥇 黃金：<b>${goldCount}</b> 筆　🏦 定存：<b>${depCount}</b> 筆<br>
     ☁️ 資料儲存於 Firebase 雲端，已自動同步`;
   document.getElementById('snapshot-list').innerHTML='<div style="font-size:12px;color:var(--muted);padding:8px">資料已存於 Firebase 雲端，不需要本機快照 ✅</div>';
 }
@@ -2156,6 +2414,7 @@ Object.assign(window,{
   openDebtModal,editDebt,delDebt,setDebtDir,saveDebt,
   openPersonManager,renderPersonManager,addPerson,
   openGoldModal,saveGold,delGold,saveGoldPrice,
+  openDepositModal,saveDeposit,delDeposit,calcDepInterest,markDepositWithdrawn,renderDeposits,
   renderBackup,manualSnapshot,exportJSON,copyJSON,importFromFile,importFromText,clearAllData,
   mergeImportFromFile,mergeImportFromText,
   closeModal,toggleBank,getOwnerOptions,getOwnerList
