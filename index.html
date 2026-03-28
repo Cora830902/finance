@@ -1435,37 +1435,27 @@ function getStockListDateFilter(){
 }
 async function fetchStockPrices(tickers){
   if(!tickers.length)return;
-  const tseQ=tickers.map(t=>`tse_${t}.tw`).join('|');
-  try{
-    const res=await fetch(`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${tseQ}&json=1&delay=0`);
-    const data=await res.json();
-    const otcRetry=[];
-    if(data.msgArray){
-      data.msgArray.forEach(item=>{
-        const t=item.c;
-        const price=parseFloat(item.z);
-        if(!isNaN(price)&&item.z!=='-'){
-          const prev=parseFloat(item.y)||price;
-          stockPriceCache[t]={price,prev,change:price-prev,pct:((price-prev)/prev*100).toFixed(2)};
-        }else{otcRetry.push(t);}
-      });
-    }
-    if(otcRetry.length){
-      const otcQ=otcRetry.map(t=>`otc_${t}.tw`).join('|');
-      const r2=await fetch(`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${otcQ}&json=1&delay=0`);
-      const d2=await r2.json();
-      if(d2.msgArray){
-        d2.msgArray.forEach(item=>{
-          const t=item.c;
-          const price=parseFloat(item.z);
-          if(!isNaN(price)&&item.z!=='-'){
-            const prev=parseFloat(item.y)||price;
-            stockPriceCache[t]={price,prev,change:price-prev,pct:((price-prev)/prev*100).toFixed(2)};
-          }
-        });
+  // 使用 TWSE afterTrading API — 原生支援 CORS，不需 proxy
+  const base='https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY';
+  async function fetchOne(ticker){
+    try{
+      const r=await fetch(`${base}?stockNo=${ticker}&response=json`,{cache:'no-store'});
+      const d=await r.json();
+      if(d.stat==='OK'&&d.data&&d.data.length){
+        const row=d.data[d.data.length-1]; // 最後一個交易日
+        const price=parseFloat(row[6].replace(/,/g,''));
+        const change=parseFloat(row[7].replace(/,/g,''));
+        if(!isNaN(price)&&price>0){
+          const prev=price-change;
+          const pct=prev!==0?((change/prev)*100).toFixed(2):'0.00';
+          stockPriceCache[ticker]={price,prev,change,pct};
+        }
       }
-    }
-    stockPriceUpdated=new Date();
+    }catch(e){console.warn('fetchOne error:',ticker,e);}
+  }
+  try{
+    await Promise.all(tickers.map(t=>fetchOne(t)));
+    if(Object.keys(stockPriceCache).length>0)stockPriceUpdated=new Date();
   }catch(e){console.error('fetchStockPrices error:',e);}
 }
 
@@ -1486,7 +1476,13 @@ async function refreshStockPrices(){
   if(btn){btn.textContent='⏳';btn.disabled=true;}
   await fetchStockPrices(holdingTickers);
   renderStocks();
-  if(btn){btn.textContent='🔄';btn.disabled=false;}
+  const gotData=Object.keys(stockPriceCache).length>0;
+  if(btn){
+    btn.textContent=gotData?'🔄':'❌';
+    btn.title=gotData?'更新即時股價':'取得報價失敗，請稍後再試';
+    if(!gotData)setTimeout(()=>{btn.textContent='🔄';btn.title='更新即時股價';},3000);
+    btn.disabled=false;
+  }
 }
 
 function renderStocks(){
