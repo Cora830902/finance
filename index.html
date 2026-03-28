@@ -270,9 +270,10 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     <div class="tab-section-header" style="margin-top:8px">💳 各卡帳單明細</div>
     <div id="bank-list"></div>
     <!-- Expense list -->
-    <div id="expense-section">
-      <div class="section-divider" id="expense-section-title" onclick="toggleExpList()" style="cursor:pointer;user-select:none">▸ 消費明細 <span id="exp-list-toggle-icon" style="font-size:11px;color:var(--muted)">（點擊展開）</span></div>
-      <div class="expense-list" id="expense-list" style="display:none"></div>
+    <!-- 年度檢視才顯示全部明細；月份檢視已在各卡片下方顯示，不重複 -->
+    <div id="expense-section" style="display:none">
+      <div class="section-divider" id="expense-section-title">▸ 年度消費明細</div>
+      <div class="expense-list" id="expense-list"></div>
     </div>
   </div>
 
@@ -1339,49 +1340,38 @@ function toggleBank(bid){
 }
 
 function renderExpenses(mo){
-  let filtered=[];
-  if(ccView==='all'||ccView==='monthly'){
-    // 非分期：依帳單月篩選；分期：依哪期落在本月
-    filtered=D.expenses.filter(e=>e.isInstallment?isInstActiveInMonth(e,mo):getExpBillingMonth(e)===mo);
-  } else if(ccView==='yearly'){
-    const yr=mo.slice(0,4);
-    // 非分期：帳單月份同年；分期：任一期落在該年
-    filtered=D.expenses.filter(e=>{
-      if(e.isInstallment){
-        const start=getExpBillingMonth(e);
-        const end=addMonths(start,(e.installments||[]).length-1);
-        return start.startsWith(yr)||end.startsWith(yr)||(start<yr+'-13'&&end>=yr+'-01');
-      }
-      return getExpBillingMonth(e).startsWith(yr);
-    });
-  }
-  filtered=filtered.sort((a,b)=>b.date.localeCompare(a.date));
+  const section=document.getElementById('expense-section');
   const el=document.getElementById('expense-list');
   const title=document.getElementById('expense-section-title');
-  const icon=document.getElementById('exp-list-toggle-icon');
-  // Yearly view: auto-expand; monthly view: respect toggle state
-  if(ccView==='yearly'){expListOpen=true;}
-  el.style.display=expListOpen?'flex':'none';
-  if(icon)icon.textContent=expListOpen?'（點擊收合）':'（點擊展開）';
-  const count=filtered.length;
-  title.innerHTML=(ccView==='yearly'?`▸ ${mo.slice(0,4)}年消費明細`:`▸ ${mo} 消費明細`)
-    +` <span style="font-size:11px;color:var(--muted);font-weight:400">${count}筆</span>`
-    +` <span id="exp-list-toggle-icon" style="font-size:11px;color:var(--muted)">${expListOpen?'（點擊收合）':'（點擊展開）'}</span>`;
-  if(!filtered.length){el.innerHTML='<div class="empty">此期間尚無消費</div>';return;}
-  el.innerHTML=filtered.map(e=>{
-    const card=findCard(e.cardId)||{color:'#888',name:'',last4:'',bankName:''};
-    let dispAmt,instLabel='';
-    if(e.isInstallment&&(ccView==='all'||ccView==='monthly')){
-      const idx=monthDiff(getExpBillingMonth(e),mo);
-      const n=(e.installments||[]).length;
-      dispAmt=getInstAmtForMonth(e,mo);
-      instLabel=`<span class="inst-badge">第${idx+1}/${n}期</span>`;
-    }else if(e.isInstallment){
-      dispAmt=e.installments.reduce((s,i)=>s+Number(i.amount||0),0);
-      instLabel=`<span class="inst-badge">分${e.installments.length}期</span>`;
-    }else{
-      dispAmt=Number(e.amount||0);
+
+  // 月份／全部 檢視：各卡片下方已顯示，不需要重複的全域清單
+  if(ccView==='all'||ccView==='monthly'){
+    section.style.display='none';
+    return;
+  }
+
+  // 年度檢視：顯示全年所有消費（所有卡片合併）
+  section.style.display='block';
+  const yr=mo.slice(0,4);
+  let filtered=D.expenses.filter(e=>{
+    if(e.isInstallment){
+      const start=getExpBillingMonth(e);
+      const end=addMonths(start,(e.installments||[]).length-1);
+      return start.slice(0,4)===yr||end.slice(0,4)===yr;
     }
+    return getExpBillingMonth(e).startsWith(yr);
+  }).sort((a,b)=>b.date.localeCompare(a.date));
+
+  title.textContent=`▸ ${yr}年 消費明細（${filtered.length}筆）`;
+  if(!filtered.length){el.innerHTML='<div class="empty">此年度尚無消費</div>';return;}
+
+  el.innerHTML=filtered.map(e=>{
+    const card=findCard(e.cardId)||{color:'#888',name:'未知',last4:'',bankName:''};
+    // 年度顯示：分期顯示總金額
+    const dispAmt=e.isInstallment
+      ?e.installments.reduce((s,i)=>s+Number(i.amount||0),0)
+      :Number(e.amount||0);
+    const instLabel=e.isInstallment?`<span class="inst-badge">分${e.installments.length}期</span>`:'';
     return`<div class="expense-row">
       <div class="exp-dot" style="background:${card.color}"></div>
       <div class="exp-info">
@@ -1398,12 +1388,6 @@ function renderExpenses(mo){
 }
 function addMonths(mo,n){
   const d=new Date(mo+'-01');d.setMonth(d.getMonth()+n);return d.toISOString().slice(0,7);
-}
-let expListOpen=false;
-function toggleExpList(){
-  expListOpen=!expListOpen;
-  document.getElementById('expense-list').style.display=expListOpen?'flex':'none';
-  document.getElementById('exp-list-toggle-icon').textContent=expListOpen?'（點擊收合）':'（點擊展開）';
 }
 
 function toggleBillConfirm(cid,mo){
