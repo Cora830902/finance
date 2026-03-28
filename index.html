@@ -998,6 +998,13 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
 </div>
 
 <script>
+window.onerror=function(msg,src,line,col,err){
+  const app=document.getElementById('app');
+  if(app&&app.children.length===0){
+    app.innerHTML='<div style="padding:40px;color:red;font-family:monospace;white-space:pre-wrap">❌ JS Error: '+msg+'\nLine: '+line+'\n'+(err?err.stack:'')+'</div>';
+  }
+  return false;
+};
 const initializeApp = (cfg) => firebase.initializeApp(cfg);
 const getDatabase = (app) => firebase.database(app);
 const ref = (db, path) => db.ref(path);
@@ -1067,10 +1074,10 @@ function loadFromFirebase(){
     const val = snapshot.val();
     if(val){
       D = val;
-      runMigrate();
     } else {
       D = defaultData();
     }
+    runMigrate();
     initApp();
   }, { onlyOnce: true });
 }
@@ -1111,21 +1118,30 @@ function runMigrate(){
     if(!D.banks)D.banks=[];
     if(!D.cardOwners)D.cardOwners=['孟青','景翔'];
     if(!D.deposits)D.deposits=[];
+    if(!D.gold)D.gold={buys:[],sells:[],currentPrice:0};
+    if(!D.gold.buys)D.gold.buys=[];
+    if(!D.gold.sells)D.gold.sells=[];
+    if(D.gold.currentPrice===undefined)D.gold.currentPrice=0;
   }catch(e){console.warn('migrate error',e)}
 }
 
 function initApp(){
-  const now=new Date().toISOString();
-  document.getElementById('filter-month').value=now.slice(0,7);
-  document.getElementById('ov-month').value=now.slice(0,7);
-  document.getElementById('exp-date').value=now.slice(0,10);
-  document.getElementById('st-date').value=now.slice(0,10);
-  document.getElementById('debt-date').value=now.slice(0,10);
-  document.getElementById('gold-date').value=now.slice(0,10);
-  document.getElementById('gold-price-input').value=D.gold.currentPrice||'';
-  rebuildExpCardSelect();
-  try{const t=parseInt(localStorage.getItem('lastTab'));if(t>=0&&t<=6)switchTab(t);else switchTab(1);}
-  catch(e){switchTab(1);}
+  try{
+    const now=new Date().toISOString();
+    document.getElementById('filter-month').value=now.slice(0,7);
+    document.getElementById('ov-month').value=now.slice(0,7);
+    document.getElementById('exp-date').value=now.slice(0,10);
+    document.getElementById('st-date').value=now.slice(0,10);
+    document.getElementById('debt-date').value=now.slice(0,10);
+    document.getElementById('gold-date').value=now.slice(0,10);
+    document.getElementById('gold-price-input').value=D.gold.currentPrice||'';
+    rebuildExpCardSelect();
+    try{const t=parseInt(localStorage.getItem('lastTab'));if(t>=0&&t<=6)switchTab(t);else switchTab(1);}
+    catch(e){switchTab(1);}
+  }catch(e){
+    console.error('initApp error',e);
+    document.getElementById('app').innerHTML='<div style="padding:40px;color:red;font-family:monospace">initApp 錯誤：'+e.message+'<br><pre>'+e.stack+'</pre></div>';
+  }
 }
 
 // ── Global vars ───────────────────────────────
