@@ -411,6 +411,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 1. 已實現總損益（永遠顯示全部total，不受明細篩選影響） -->
+    <div class="tab-section-header" style="color:#6EE7B7">📉 已實現損益（全部）</div>
     <div id="stock-pnl-section" style="background:#0e2d22;border:1px solid #1d5c3e;border-radius:12px;padding:12px 14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:10px;color:var(--muted)">賣出損益</span>
@@ -523,6 +524,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <button class="qnav-btn" onclick="document.getElementById('gold-sell-section').scrollIntoView({behavior:'smooth'})">📉 賣出記錄</button>
     </div>
     <div id="gold-price-section">
+    <div class="tab-section-header">🥇 金價輸入 & 持有統計</div>
     <div class="gold-price-row">
       <span class="gold-price-label">🥇 目前一錢金價 (NT$)</span>
       <input class="gold-price-input" type="number" id="gold-price-input" placeholder="輸入金價" oninput="saveGoldPrice();renderGold()">
@@ -553,6 +555,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       <div class="filter-bar"><button class="btn-icon" onclick="openDepositModal()">＋ 新增定存</button></div>
 
       <!-- 摘要 -->
+      <div class="tab-section-header" id="dep-summary-header" style="display:none">📊 定存摘要</div>
       <div id="deposit-summary-box" style="display:none;background:#0e2240;border:1px solid #1d4070;border-radius:12px;padding:12px 14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <span style="font-size:10px;color:var(--muted)">總本金</span>
@@ -569,11 +572,13 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
       </div>
 
       <!-- 定存列表 -->
+      <div class="tab-section-header">📋 我的定存列表</div>
       <div id="deposit-list"><div class="empty" style="padding:40px 0">尚無定存記錄<br><span style="font-size:11px;color:var(--muted)">點上方「＋ 新增定存」開始記錄</span></div></div>
     </div>
 
     <!-- ── 市場利率參考 ── -->
     <div id="dep-market-view" style="display:none">
+      <div class="tab-section-header">📊 各大銀行定存利率參考</div>
       <div style="background:#1a1a2e;border:1px solid #2d2d4e;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:11px;color:var(--muted)">📅 資料來源：Mr.Market 市場先生 · 2026/03 更新</span>
         <a href="https://rich01.com/twd-deposit-all/" target="_blank" style="font-size:11px;color:#60a5fa;text-decoration:none">查看最新 ↗</a>
@@ -598,15 +603,23 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
 
   <!-- ══ 備份與還原 ══ -->
   <div class="tab-content" id="tab-6" data-tab="6">
+    <!-- Quick Nav -->
+    <div class="quick-nav">
+      <button class="qnav-btn" onclick="document.getElementById('backup-status-section').scrollIntoView({behavior:'smooth'})">📊 資料狀態</button>
+      <button class="qnav-btn" onclick="document.getElementById('backup-export-section').scrollIntoView({behavior:'smooth'})">📤 匯出</button>
+      <button class="qnav-btn" onclick="document.getElementById('backup-import-section').scrollIntoView({behavior:'smooth'})">📥 匯入</button>
+      <button class="qnav-btn" onclick="document.getElementById('backup-snapshot-section').scrollIntoView({behavior:'smooth'})">🕐 快照</button>
+      <button class="qnav-btn" onclick="document.getElementById('backup-merge-section').scrollIntoView({behavior:'smooth'})">➕ 合併匯入</button>
+    </div>
     <!-- 資料狀態 -->
-    <div class="section-card">
+    <div class="section-card" id="backup-status-section">
       <div class="section-title">📊 目前資料狀態</div>
       <div id="backup-stats" style="font-size:13px;line-height:2"></div>
       <div style="margin-top:8px;font-size:11px;color:var(--muted)">資料存於此裝置瀏覽器。建議每月備份一次。</div>
     </div>
 
     <!-- 匯出 -->
-    <div class="section-card">
+    <div class="section-card" id="backup-export-section">
       <div class="section-title">📤 匯出備份</div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <button class="btn btn-primary" onclick="exportJSON()" style="text-align:left;padding:12px 16px">
@@ -621,7 +634,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 匯入 -->
-    <div class="section-card">
+    <div class="section-card" id="backup-import-section">
       <div class="section-title">📥 還原備份</div>
       <div style="background:#2d1212;border:1px solid #5c1d1d;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);margin-bottom:12px">
         ⚠️ 還原會覆蓋目前所有資料！建議先備份再還原。
@@ -642,7 +655,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 合併匯入 -->
-    <div class="section-card">
+    <div class="section-card" id="backup-merge-section">
       <div class="section-title">➕ 合併匯入股票</div>
       <div style="background:#0e2d22;border:1px solid #1d5c3e;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--accent);margin-bottom:12px">
         ✅ 只新增，不會覆蓋現有資料。重複的筆數（同日期＋代碼＋股數＋單價）會自動略過。
@@ -663,7 +676,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
     </div>
 
     <!-- 自動備份紀錄 -->
-    <div class="section-card">
+    <div class="section-card" id="backup-snapshot-section">
       <div class="section-title">
         <span>🕐 自動快照 (最近 5 筆)</span>
         <button class="btn btn-sm btn-ghost" onclick="manualSnapshot()">立即快照</button>
@@ -1505,7 +1518,8 @@ function editExpense(id){openExpenseModal(id)}
 function delExpense(id){if(!confirm('確定刪除？'))return;D.expenses=D.expenses.filter(e=>e.id!==id);save();renderCC();}
 function toggleInst(){
   const on=document.getElementById('exp-inst').checked;
-  document.getElementById('lbl-amt').textContent=on?'　':'金額';
+  // Hide entire label+amount row when installment is on (prevents phantom empty grid row)
+  document.getElementById('lbl-amt').style.display=on?'none':'block';
   document.getElementById('exp-amount').style.display=on?'none':'block';
   document.getElementById('inst-section').style.display=on?'block':'none';
   if(on)buildInstFields();
@@ -1520,15 +1534,20 @@ function buildInstFields(existing){
   const total=Number(document.getElementById('exp-inst-total')?.value)||0;
   const base=total?Math.floor(total/n):0;
   const rem=total?total-base*n:0;
-  document.getElementById('exp-inst-fields').innerHTML=Array.from({length:n},(_,i)=>{
+  // Use 2-column grid for 4+ periods to save space
+  const use2col=n>=4;
+  const containerStyle=use2col?'display:grid;grid-template-columns:1fr 1fr;gap:5px 10px':'display:flex;flex-direction:column;gap:5px';
+  const rows=Array.from({length:n},(_,i)=>{
     const autoAmt=total?(i===0?base+rem:base):0;
     const val=existing?existing[i]?.amount||'':(autoAmt||'');
-    return`<div class="inst-row">
-      <span style="font-size:11px;color:var(--muted);min-width:38px;flex-shrink:0">第${i+1}期</span>
+    return`<div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:11px;color:var(--muted);width:36px;flex-shrink:0;font-family:var(--mono)">第${i+1}期</span>
       <input type="number" class="inst-amt" placeholder="0" value="${val}"
-        style="flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-size:13px">
+        style="flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);color:${val?'var(--accent)':'var(--text)'};border-radius:6px;padding:5px 8px;font-size:13px;font-family:var(--mono);text-align:right"
+        oninput="this.style.color='var(--accent)'">
     </div>`;
   }).join('');
+  document.getElementById('exp-inst-fields').innerHTML=`<div style="${containerStyle}">${rows}</div>`;
 }
 function saveExpense(){
   const name=document.getElementById('exp-name').value.trim();
@@ -2805,6 +2824,7 @@ function markDepositWithdrawn(id){
 function renderDeposits(){
   if(!D.deposits||!D.deposits.length){
     document.getElementById('deposit-summary-box').style.display='none';
+    const hdr=document.getElementById('dep-summary-header');if(hdr)hdr.style.display='none';
     document.getElementById('deposit-list').innerHTML='<div class="empty" style="padding:40px 0">尚無定存記錄<br><span style="font-size:11px;color:var(--muted)">點右上角「＋ 新增定存」開始記錄</span></div>';
     return;
   }
@@ -2820,6 +2840,7 @@ function renderDeposits(){
   const nextMaturity=upcoming.length?upcoming[0].matDate.toISOString().slice(0,10):'—';
   // 更新摘要
   document.getElementById('deposit-summary-box').style.display='block';
+  const hdr=document.getElementById('dep-summary-header');if(hdr)hdr.style.display='block';
   document.getElementById('dep-total-principal').textContent=`NT$ ${fmt(totalPrincipal)}`;
   document.getElementById('dep-total-interest').textContent=`NT$ ${fmt(totalInterest)}`;
   document.getElementById('dep-next-maturity').textContent=nextMaturity!=='—'?nextMaturity:'無即將到期';
