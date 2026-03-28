@@ -384,7 +384,7 @@ input[type=color]{width:36px;height:32px;padding:2px;border-radius:6px;border:1p
         <span style="width:32px;flex-shrink:0">人</span>
         <span style="flex:1">卡片</span>
         <span style="width:32px;flex-shrink:0;text-align:center">末四</span>
-        <div style="display:flex"><span style="width:58px;text-align:right">帳單</span><span style="width:58px;text-align:right">已繳</span><span style="width:58px;text-align:right">未繳</span></div>
+        <div style="display:flex"><span style="width:64px;text-align:right">本月帳單</span></div>
       </div>
       <div id="ov-card-rows"></div>
       <div class="total-row" style="margin-top:8px"><span>總帳單</span><span class="neg" id="ov-total-bill">NT$ 0</span></div>
@@ -2297,27 +2297,46 @@ function recalcOverview(mo){
   document.getElementById('ov-total-fixed').textContent=`NT$ ${fmt(fixedTotal)}`;
   document.getElementById('ov-total-var').textContent=`NT$ ${fmt(varTotal)}`;
 
+  // ── 使用銀行層級計算（與信用卡分頁保持一致）──
   let totalBill=0,totalPaid=0,totalInterest=0;
-  const cardRows=allCards().map(c=>{
-    const bill=getCardBill(c.id,mo);
-    const interest=getCardInterest(c.id,mo);
-    const paid=getPaid(c.id,mo);
-    const unpaid=bill+interest-paid;
-    totalBill+=bill+interest;totalPaid+=paid;totalInterest+=interest;
-    const billConf=isBillConfirmed(c.id,mo);
-    const paidConf=isPaidConfirmed(c.id,mo);
-    return`<div style="display:flex;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px solid #1a2d3f;gap:4px">
-      <span style="color:var(--accent2);font-size:11px;width:32px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.owner||'—'}</span>
-      <span style="color:${c.color};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:11px">${c.name}</span>
-      <span style="font-family:var(--mono);font-size:10px;color:var(--muted);width:32px;flex-shrink:0;text-align:center">${c.last4}</span>
-      <div style="display:flex;font-family:var(--mono)">
-        <span class="${billConf?'confirmed':''} neg" style="width:58px;text-align:right;font-size:11px">$${fmt(bill)}</span>
-        <span class="${paidConf?'confirmed':''} pos" style="width:58px;text-align:right;font-size:11px">$${fmt(paid)}</span>
-        <span class="${unpaid>0?'warn':'pos'}" style="width:58px;text-align:right;font-size:11px">$${fmt(unpaid)}</span>
-      </div>
-    </div>`;
+  const bankCardRows=[];
+  (D.banks||[]).forEach(b=>{
+    const bCarry=getBankCarry(b.id,mo);
+    const bInterest=getBankInterest(b.id,mo);
+    const bPaid=getBankPaid(b.id,mo);
+    const bPaidConf=isBankPaidConfirmed(b.id,mo);
+    totalPaid+=bPaid;
+    totalInterest+=bInterest;
+    // 各卡帳單列
+    (b.cards||[]).forEach(c=>{
+      const bill=getCardBill(c.id,mo);
+      totalBill+=bill;
+      const billConf=isBillConfirmed(c.id,mo);
+      bankCardRows.push(`<div style="display:flex;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px solid #1a2d3f;gap:4px">
+        <span style="color:var(--accent2);font-size:11px;width:32px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.owner||b.owner||'—'}</span>
+        <span style="color:${b.color};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:11px">${c.name}</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--muted);width:32px;flex-shrink:0;text-align:center">${c.last4}</span>
+        <div style="display:flex;font-family:var(--mono)">
+          <span class="${billConf?'confirmed':''} neg" style="width:64px;text-align:right;font-size:11px">$${fmt(bill)}</span>
+        </div>
+      </div>`);
+    });
+    // 銀行結轉/利息/繳款 小結列
+    const bBill=getBankTotalBill(b.id,mo);
+    const bDisplayTotal=bBill+bCarry+bInterest;
+    if(bCarry>0||bInterest>0||bPaid>0){
+      const bUnpaid=Math.max(0,bDisplayTotal-bPaid);
+      bankCardRows.push(`<div style="display:flex;align-items:center;font-size:11px;padding:3px 0 3px 8px;background:var(--bg2);border-bottom:1px solid #1a2d3f;gap:4px">
+        <span style="color:${b.color};flex:1;font-size:10px;color:var(--muted)">${b.name} 小結</span>
+        ${bCarry>0?`<span style="color:var(--yellow);font-size:10px">結轉$${fmt(bCarry)}</span>`:''}
+        ${bInterest>0?`<span style="color:var(--orange);font-size:10px">息$${fmt(bInterest)}</span>`:''}
+        <span style="font-family:var(--mono);font-size:10px;${bPaidConf?'text-decoration:line-through;color:var(--muted)':'color:var(--accent2)'}">繳$${fmt(bPaid)}</span>
+        <span style="font-family:var(--mono);font-size:10px;color:${bUnpaid>0?'var(--red)':'var(--accent)'}">${bUnpaid>0?'欠$'+fmt(bUnpaid):'✓'}</span>
+      </div>`);
+      totalBill+=bCarry+bInterest;
+    }
   });
-  document.getElementById('ov-card-rows').innerHTML=cardRows.join('');
+  document.getElementById('ov-card-rows').innerHTML=bankCardRows.join('');
   const totalUnpaid=totalBill-totalPaid;
   document.getElementById('ov-total-bill').textContent=`NT$ ${fmt(totalBill)}`;
   document.getElementById('ov-total-paid').textContent=`NT$ ${fmt(totalPaid)}`;
